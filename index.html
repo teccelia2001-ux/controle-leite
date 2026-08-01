@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="color-scheme" content="light dark" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
 </head>
 <body style="margin:0">
 <title>Controle de Produção de Leite</title>
@@ -675,6 +677,7 @@
 
   <footer class="foot">
     A quinzena fecha nos dias <strong>15</strong> e no <strong>último dia do mês</strong>.
+    <br />versão <strong id="versao">—</strong> · <a href="#" id="diagLink" style="color:var(--muted)">diagnóstico</a>
   </footer>
 
 </div>
@@ -688,6 +691,7 @@
                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   var SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
+  var VERSAO = "01/08 14:42";
   var CONTAS = "controle-leite.contas.v1";
   var PREFIXO = "controle-leite.dados.";
 
@@ -3414,6 +3418,90 @@
   document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
   document.getElementById("receberDados").addEventListener("click", receberDados);
   document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
+
+  /* ---------------- diagnóstico ----------------
+     Serve para responder "por que não chegou": diz em uma tela se
+     este aparelho está ligado ao servidor e o que ele enxerga lá.  */
+
+  document.getElementById("versao").textContent = VERSAO;
+
+  document.getElementById("diagLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    var L = [];
+    L.push("versão: " + VERSAO);
+    L.push("endereço: " + location.host);
+    L.push("conta: " + (conta ? conta.usuario + " (" + (contas.papel || "?") + ")" : "ninguém"));
+    L.push("id da conta: " + (conta ? conta.id : "—"));
+    L.push("conta no servidor: " + (conta && ehUuid(conta.id) ? "sim" : "NÃO — nasceu só neste aparelho"));
+    L.push("sessão no servidor: " + (sessao ? "sim" : "NÃO"));
+    L.push("internet: " + (navigator.onLine === false ? "não" : "sim"));
+    L.push("estado da sincronização: " + (estadoSync || "—"));
+    if (contas && contas.papel === "admin") {
+      L.push("produtores nesta lista: " + contas.produtores.length);
+      contas.produtores.forEach(function (p) {
+        L.push("  · " + p.usuario + (p.doServidor ? " [servidor]" : " [SÓ AQUI]") +
+          (p.dados ? " — " + Object.keys(p.dados.registros).length + " dia(s)" : " — sem dados"));
+      });
+    }
+
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>Diagnóstico</h3>" +
+        "<p>Perguntando ao servidor…</p>" +
+        '<div class="codigo" data-txt>' + escapeHtml(L.join("\n")) + "</div>" +
+        '<div class="acoes">' +
+          '<button type="button" data-no>Fechar</button>' +
+          '<button type="button" data-copy class="btn-primary">Copiar</button>' +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    function fechar() { if (over.parentNode) over.parentNode.removeChild(over); }
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    over.querySelector("[data-copy]").addEventListener("click", function () {
+      var b = this;
+      copiarTexto(over.querySelector("[data-txt]").textContent, function () { b.textContent = "Copiado"; });
+    });
+
+    // pergunta ao servidor o que ele realmente devolve para esta conta
+    token().then(function (tk) {
+      if (!tk) {
+        L.push("consulta ao servidor: sem sessão, não dá para perguntar");
+        over.querySelector("[data-txt]").textContent = L.join("\n");
+        over.querySelector("p").textContent = "Terminado.";
+        return;
+      }
+      var meu = conta.id;
+      Promise.all([
+        rest("GET", "perfis?select=id,nome,usuario,papel,admin_id", null, tk),
+        rest("GET", "registros?select=produtor_id,data&limit=200", null, tk)
+      ]).then(function (r) {
+        var perfis = (r[0].ok && r[0].corpo) || [];
+        var regs = (r[1].ok && r[1].corpo) || [];
+        L.push("— resposta do servidor —");
+        L.push("perfis que esta conta enxerga: " + perfis.length);
+        perfis.forEach(function (p) {
+          var n = regs.filter(function (x) { return x.produtor_id === p.id; }).length;
+          L.push("  · " + p.usuario + " (" + p.papel + ")" +
+            (p.id === meu ? " ← eu" : "") +
+            (p.admin_id ? " · admin " + String(p.admin_id).slice(0, 8) : "") +
+            " — " + n + " dia(s)");
+        });
+        if (contas.papel === "admin") {
+          var meus = perfis.filter(function (p) { return p.admin_id === meu; }).length;
+          L.push("produtores ligados a mim no servidor: " + meus);
+          if (!meus) L.push("  >> nenhum produtor aponta para este administrador");
+        }
+        over.querySelector("[data-txt]").textContent = L.join("\n");
+        over.querySelector("p").textContent = "Terminado.";
+      }, function () {
+        L.push("consulta ao servidor: falhou (sem internet?)");
+        over.querySelector("[data-txt]").textContent = L.join("\n");
+        over.querySelector("p").textContent = "Terminado.";
+      });
+    });
+  });
 
   document.getElementById("ligarServidor").addEventListener("click", function () {
     janelaForm({
