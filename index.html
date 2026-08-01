@@ -598,6 +598,7 @@
         <button id="novoProdutor" class="btn-primary">Criar acesso de produtor</button>
         <button id="receberDados">Receber dados de um produtor</button>
         <button id="meuAcesso">Entrar em outro aparelho</button>
+        <button id="limparProdutores">Remover todos</button>
       </div>
       <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
         Cada produtor lança no celular dele. Você cria o acesso, manda o código de convite,
@@ -695,7 +696,7 @@
                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   var SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
-  var VERSAO = "01/08 15:23";
+  var VERSAO = "01/08 15:32";
   var CONTAS = "controle-leite.contas.v1";
   var PREFIXO = "controle-leite.dados.";
 
@@ -1304,6 +1305,63 @@
     });
   }
 
+  /* ---------------- limpar a lista ----------------
+     Some com todos os produtores desta lista. Quem tem login próprio
+     não perde a conta nem os lançamentos dele: apenas deixa de estar
+     ligado a este administrador.                                    */
+
+  function removerTodosProdutores() {
+    var lista = contas.produtores;
+    if (!lista.length) {
+      avisar("Lista já está vazia", "Não há produtores para remover.");
+      return;
+    }
+    var comLogin = lista.filter(function (p) { return p.doServidor; }).length;
+    var semLogin = lista.length - comLogin;
+
+    perguntar("Remover todos os " + lista.length + " produtores?",
+      (semLogin ? semLogin + " sem login: os dados que você guarda deles serão apagados daqui e do servidor. " : "") +
+      (comLogin ? comLogin + " com login: a conta e os lançamentos deles continuam, só saem da sua lista. " : "") +
+      "Não dá para desfazer.",
+      "Remover todos", true, function () {
+        var livres = lista.filter(function (p) { return !p.doServidor; });
+        var lx = lixoDe();
+        lx.produtores = lx.produtores || [];
+        livres.forEach(function (p) { if (lx.produtores.indexOf(p.id) < 0) lx.produtores.push(p.id); });
+        guardarLixo(lx);
+
+        var comConta = lista.filter(function (p) { return p.doServidor; });
+        contas.ignorados = (contas.ignorados || []).concat(comConta.map(function (p) { return p.id; }));
+        contas.produtores = [];
+        contas.livresSujo = true;
+        if (vendo) {
+          vendo = null; leitura = false;
+          document.body.classList.remove("leitura");
+          db = load(); hydrate();
+        }
+        salvarContas();
+        render();
+
+        if (!sessao) { msg("Produtores removidos deste aparelho."); return; }
+        token().then(function (tk) {
+          if (!tk) return;
+          var tarefas = livres.map(function (p) {
+            return rest("DELETE", "produtores_livres?id=eq." + p.id, null, tk);
+          });
+          // desliga do administrador quem tem conta própria
+          comConta.forEach(function (p) {
+            tarefas.push(rest("PATCH", "perfis?id=eq." + p.id, { admin_id: null }, tk));
+          });
+          Promise.all(tarefas).then(function () {
+            var l2 = lixoDe(); l2.produtores = []; guardarLixo(l2);
+            contas.livresSujo = false; salvarContas();
+            marcarSync("lista limpa · " + agoraCurto());
+            render();
+          });
+        });
+      });
+  }
+
   // produtor que nasceu só neste aparelho ganha conta de verdade
   function promoverProdutor(p) {
     if (!p || !sessao) return;
@@ -1558,6 +1616,12 @@
         if (!r.ok || !Array.isArray(r.corpo)) return;
         var antigos = {};
         contas.produtores.forEach(function (p) { antigos[p.id] = p; });
+        // quem o administrador removeu não volta, mesmo que o banco
+        // ainda o mantenha ligado a ele
+        var fora = {};
+        (contas.ignorados || []).forEach(function (id) { fora[id] = true; });
+        r.corpo = r.corpo.filter(function (p) { return !fora[p.id]; });
+
         var doServidor = r.corpo.map(function (p) {
           var v = antigos[p.id] || {};
           return { id: p.id, nome: p.nome, usuario: p.usuario, fazenda: p.fazenda || p.nome,
@@ -2266,6 +2330,9 @@
             "O acesso sai da sua lista e os dados que ele já mandou somem daqui. " +
             "Os lançamentos continuam no celular dele.", "Remover", true, function () {
               contas.produtores = contas.produtores.filter(function (o) { return o.id !== p.id; });
+              if (p.doServidor) {
+                contas.ignorados = (contas.ignorados || []).concat([p.id]);
+              }
               if (!p.doServidor) {                 // tira também do servidor
                 var lx = lixoDe();
                 lx.produtores = lx.produtores || [];
@@ -3669,6 +3736,7 @@
   document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
   document.getElementById("receberDados").addEventListener("click", receberDados);
   document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
+  document.getElementById("limparProdutores").addEventListener("click", removerTodosProdutores);
 
   /* ---------------- diagnóstico ----------------
      Serve para responder "por que não chegou": diz em uma tela se
