@@ -590,6 +590,7 @@
       <div class="tools">
         <button id="novoProdutor" class="btn-primary">Criar acesso de produtor</button>
         <button id="receberDados">Receber dados de um produtor</button>
+        <button id="meuAcesso">Entrar em outro aparelho</button>
       </div>
       <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
         Cada produtor lança no celular dele. Você cria o acesso, manda o código de convite,
@@ -790,10 +791,11 @@
   // endereço próprio.
   function conviteDoEndereco() {
     var t = String(location.hash || "") + " " + String(location.search || "");
-    if (t.indexOf("CONVITE") < 0) return null;
+    if (t.indexOf("CONVITE") < 0 && t.indexOf("ADMIN") < 0) return null;
     var c = null;
     try { c = decodificar(decodeURIComponent(t)); } catch (e) { c = decodificar(t); }
-    return (c && c.tipo === "CONVITE" && c.corpo && c.corpo.id) ? c.corpo : null;
+    if (!c || !c.corpo || !c.corpo.id) return null;
+    return (c.tipo === "CONVITE" || c.tipo === "ADMIN") ? c : null;
   }
 
   function limparEndereco() {
@@ -812,7 +814,7 @@
   // aceita a mensagem inteira colada do WhatsApp: acha o código no meio do recado
   function decodificar(txt) {
     var t = String(txt || "").replace(/\s+/g, "");
-    var m = /(CONVITE|ENVIO)\.([A-Za-z0-9+/=]+)\.FIM/.exec(t);
+    var m = /(CONVITE|ENVIO|ADMIN)\.([A-Za-z0-9+/=]+)\.FIM/.exec(t);
     if (!m) return null;
     try {
       return { tipo: m[1], corpo: JSON.parse(decodeURIComponent(escape(atob(m[2])))) };
@@ -1164,11 +1166,12 @@
       corpo.querySelector("[data-voltar]").addEventListener("click", function () { gate(contas ? "login" : "inicio"); });
       corpo.querySelector("[data-ok]").addEventListener("click", function () {
         var c = decodificar(corpo.querySelector("[data-cod]").value);
-        if (!c || c.tipo !== "CONVITE" || !c.corpo || !c.corpo.id) {
+        if (!c || !c.corpo || !c.corpo.id || (c.tipo !== "CONVITE" && c.tipo !== "ADMIN")) {
           av2.textContent = "Código inválido. Copie o código inteiro que o administrador mandou.";
           return;
         }
-        aplicarConvite(c.corpo);
+        if (c.tipo === "ADMIN") aplicarAcessoAdmin(c.corpo);
+        else aplicarConvite(c.corpo);
       });
       var colar = corpo.querySelector("[data-colar]");
       if (colar) colar.addEventListener("click", function () {
@@ -1540,6 +1543,106 @@
         return true;
       }
     });
+  }
+
+  /* ---------------- administrador em outro aparelho ----------------
+     O acesso do administrador também mora só neste aparelho. Este link
+     instala a conta dele no aparelho novo — e, se ele quiser, leva
+     junto a lista de produtores e o que já foi recebido. Depois disso,
+     aquele aparelho pede só usuário e senha.                          */
+
+  function meuAcessoAdmin() {
+    perguntar("Entrar em outro aparelho",
+      "Levar só o acesso deixa o link curto e sem nenhum dado dentro. " +
+      "Levar tudo carrega no link a sua lista de produtores e a produção que eles já mandaram — " +
+      "quem receber esse link vê esses dados, então mande só para você mesmo.",
+      "Levar tudo", false, function () { gerarAcessoAdmin(true); },
+      "Só o acesso", function () { gerarAcessoAdmin(false); });
+  }
+
+  function gerarAcessoAdmin(completo) {
+    var corpo = {
+      id: conta.id, nome: conta.nome, usuario: conta.usuario, senha: conta.senha
+    };
+    if (completo) {
+      corpo.produtores = contas.produtores;
+      corpo.db = db;
+    }
+    var cod = codificar("ADMIN", corpo);
+    var porLink = !dentroDaMoldura();
+    var link = porLink ? linkConvite(cod) : null;
+
+    // link gigante trava em alguns aplicativos de mensagem
+    if (porLink && link.length > 8000) {
+      perguntar("Ficou grande demais para um link",
+        "São " + Math.round(link.length / 1000) + " mil caracteres, e aplicativo de mensagem costuma cortar. " +
+        "Melhor levar só o acesso pelo link e passar os dados pelo backup (Copiar backup aqui, Restaurar lá).",
+        "Levar só o acesso", false, function () { gerarAcessoAdmin(false); });
+      return;
+    }
+
+    var recado = "Acesso de administrador — " + conta.nome + "\n" +
+      "Usuário: " + conta.usuario + "\n" +
+      (completo ? "Leva junto: " + contas.produtores.length + " produtor(es) e os seus lançamentos\n" : "") +
+      "\n" + (porLink
+        ? "Abra este link no outro aparelho:\n\n" + link
+        : "Cole este código na tela de convite do outro aparelho:\n\n" + cod);
+
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>Seu acesso em outro aparelho</h3>" +
+        "<p>Mande isto <strong>só para você mesmo</strong>. No aparelho novo, " +
+        (porLink ? "toque no link" : "cole o código") +
+        " e entre com a sua senha de sempre — ela não vai escrita aqui.</p>" +
+        '<div class="codigo">' + escapeHtml(recado) + "</div>" +
+        '<div class="acoes">' +
+          '<button type="button" data-no>Fechar</button>' +
+          '<button type="button" data-copy class="btn-primary">Copiar</button>' +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    function fechar() { if (over.parentNode) over.parentNode.removeChild(over); }
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    over.querySelector("[data-copy]").addEventListener("click", function () {
+      var b = this;
+      copiarTexto(recado, function () {
+        b.textContent = "Copiado";
+        setTimeout(fechar, 1000);
+      }, function () {
+        fechar();
+        janelaTexto({ titulo: "Copie na mão", valor: recado, leitura: true, textoOk: "Pronto" });
+      });
+    });
+  }
+
+  // instala o acesso de administrador que veio pelo link ou pelo código
+  function aplicarAcessoAdmin(c) {
+    function gravar() {
+      contas = {
+        papel: "admin",
+        eu: { id: "admin", nome: c.nome, usuario: c.usuario, senha: c.senha },
+        produtores: Array.isArray(c.produtores) ? c.produtores : [],
+        sessao: null
+      };
+      salvarContas();
+      if (c.db) {
+        try { localStorage.setItem(chaveDados("admin"), JSON.stringify(normalizar(c.db))); } catch (e) {}
+      }
+      limparEndereco();
+      gate("login");
+      avisar("Acesso instalado", "Pronto, " + c.nome + ". Entre com a sua senha de sempre." +
+        (c.produtores ? " A sua lista de produtores veio junto." : " A lista de produtores não veio: use o backup para trazer."));
+    }
+
+    if (contas && contas.eu && !(contas.papel === "admin" && contas.eu.usuario === c.usuario)) {
+      perguntar("Trocar o acesso deste aparelho?",
+        "Agora ele está com o acesso de " + contas.eu.nome + ", e vai passar para o administrador " + c.nome + ".",
+        "Trocar", false, gravar);
+      return;
+    }
+    gravar();
   }
 
   function enviarAoAdmin() {
@@ -2737,6 +2840,7 @@
 
   document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
   document.getElementById("receberDados").addEventListener("click", receberDados);
+  document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
   document.getElementById("enviarAdmin").addEventListener("click", enviarAoAdmin);
 
   function iniciarApp() {
@@ -2753,10 +2857,11 @@
     if (!totalGeral()) document.getElementById("settings").open = false;
   }
 
-  var conviteNoLink = conviteDoEndereco();
-  if (conviteNoLink) {
-    if (!contas) gate("inicio");     // deixa uma tela por trás, o convite manda
-    aplicarConvite(conviteNoLink);
+  var noLink = conviteDoEndereco();
+  if (noLink) {
+    if (!contas) gate("inicio");     // deixa uma tela por trás, o link manda
+    if (noLink.tipo === "ADMIN") aplicarAcessoAdmin(noLink.corpo);
+    else aplicarConvite(noLink.corpo);
   }
   else if (!contas) gate("inicio");
   else if (contas.sessao && contas.sessao === contas.eu.id) entrar(contas.eu);
