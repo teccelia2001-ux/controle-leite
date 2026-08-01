@@ -585,6 +585,7 @@
       <h2>Produtores</h2>
       <span class="hint" id="adminHint">—</span>
     </div>
+    <div class="missing" id="avisoServidor" hidden></div>
     <div id="prodLista"></div>
     <div class="card-body">
       <div class="tools">
@@ -1829,7 +1830,8 @@
         var s = p.dados ? statsDe(p) : null;
         if (s) { somaLitros += s.total; comDados++; if (s.sobra !== null) somaSobra += s.sobra; }
         return '<div class="prod-row" data-id="' + p.id + '">' +
-          '<div class="prod-nome">' + escapeHtml(p.nome) + "<span>" + escapeHtml(p.usuario) + "</span></div>" +
+          '<div class="prod-nome">' + escapeHtml(p.nome) + "<span>" + escapeHtml(p.usuario) +
+            (p.doServidor ? "" : ' · <b style="color:var(--down)">só neste aparelho</b>') + "</span></div>" +
           '<div class="prod-num">' + (s ? nL(s.total, 0) + " L" : "—") +
             "<small>" + (p.recebido ? "enviado " + diaCurto(p.recebido) : "nada recebido") + "</small></div>" +
           '<div class="prod-num">' + (s && s.sobra !== null ? nBRL(s.sobra) : "—") + "<small>sobra</small></div>" +
@@ -1855,6 +1857,21 @@
       : lista.length + " produtor" + (lista.length > 1 ? "es" : "") + " · " +
         comDados + " com dados · " + nL(somaLitros, 0) + " L na quinzena" +
         (somaSobra ? " · sobra de " + nBRL(somaSobra) : "");
+
+    // avisa quando este acesso não está ligado ao servidor: sem isso,
+    // nada do produtor chega aqui, por mais que ele lance
+    var alerta = document.getElementById("avisoServidor");
+    if (alerta) {
+      if (temServidor() && !sessao) {
+        alerta.hidden = false;
+        alerta.innerHTML = "<strong>Este acesso não está ligado ao servidor.</strong> " +
+          "Ele foi criado só neste aparelho, então a produção dos produtores não chega aqui. " +
+          "Toque em <strong>Sair</strong> e entre de novo: se ainda não tem conta no servidor, " +
+          "use <strong>Criar acesso de administrador</strong> — aí os produtores criados passam a valer em qualquer aparelho.";
+      } else {
+        alerta.hidden = true;
+      }
+    }
   }
 
   function acharProdutor(id) {
