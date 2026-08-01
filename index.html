@@ -695,7 +695,7 @@
                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   var SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
-  var VERSAO = "01/08 15:10";
+  var VERSAO = "01/08 15:23";
   var CONTAS = "controle-leite.contas.v1";
   var PREFIXO = "controle-leite.dados.";
 
@@ -1493,6 +1493,64 @@
     });
   }
 
+  /* ---------------- produtores sem login ----------------
+     Produtor que não tem conta própria continua existindo: quem
+     guarda os dados dele no servidor é o aparelho do administrador.
+     Assim o painel fica igual em todos os aparelhos dele.         */
+
+  function marcarLivresSujo() {
+    if (contas) { contas.livresSujo = true; salvarContas(); }
+  }
+
+  function sincronizarLivres(tk) {
+    var livres = contas.produtores.filter(function (p) { return !p.doServidor; });
+    var mudou = false;
+    livres.forEach(function (p) {
+      if (!ehUuid(p.id)) { p.id = uuid(); mudou = true; }   // o servidor exige código no formato dele
+    });
+    if (mudou) salvarContas();
+
+    var l = lixoDe();
+    var apagar = (l.produtores || []).map(function (id) {
+      return rest("DELETE", "produtores_livres?id=eq." + id, null, tk);
+    });
+
+    return Promise.all(apagar).then(function () {
+      if (l.produtores && l.produtores.length) { l.produtores = []; guardarLixo(l); }
+      return rest("GET", "produtores_livres?admin_id=eq." + conta.id + "&select=*", null, tk);
+    }).then(function (r) {
+      if (!r.ok || !Array.isArray(r.corpo)) return null;      // tabela ainda não criada
+      var noServidor = {};
+      r.corpo.forEach(function (x) { noServidor[x.id] = x; });
+
+      // manda os que faltam lá, e todos se algo mudou aqui
+      var mandar = contas.livresSujo ? livres : livres.filter(function (p) { return !noServidor[p.id]; });
+      var envio = mandar.length
+        ? rest("POST", "produtores_livres", mandar.map(function (p) {
+            return { id: p.id, admin_id: conta.id, nome: p.nome, usuario: p.usuario || null,
+                     fazenda: p.fazenda || p.nome, dados: p.dados || {}, recebido: p.recebido || null };
+          }), tk, { Prefer: "resolution=merge-duplicates" })
+        : Promise.resolve({ ok: true });
+
+      return envio.then(function (e) {
+        if (e && e.ok && contas.livresSujo) { contas.livresSujo = false; salvarContas(); }
+        var enviados = {};
+        if (e && e.ok) mandar.forEach(function (p) { enviados[p.id] = true; });
+        // o que veio do servidor vale, menos o que acabamos de mandar
+        var vindos = r.corpo.filter(function (x) { return !enviados[x.id]; }).map(function (x) {
+          return { id: x.id, nome: x.nome, usuario: x.usuario || "", fazenda: x.fazenda || x.nome,
+                   criado: (x.atualizado_em || "").slice(0, 10), recebido: x.recebido || null,
+                   dados: (x.dados && x.dados.registros) ? normalizar(x.dados) : null,
+                   doServidor: false, guardado: true };
+        });
+        var mantidos = livres.filter(function (p) { return enviados[p.id]; });
+        mantidos.forEach(function (p) { p.guardado = true; });
+        var pendentes = livres.filter(function (p) { return !enviados[p.id] && !noServidor[p.id]; });
+        return mantidos.concat(vindos, pendentes);
+      });
+    }, function () { return null; });
+  }
+
   // a lista de produtores passa a vir do servidor, com a produção deles
   function puxarProdutores(tk) {
     return rest("GET", "perfis?admin_id=eq." + conta.id + "&select=id,nome,usuario,fazenda,criado_em", null, tk)
@@ -1506,8 +1564,6 @@
                    criado: (p.criado_em || "").slice(0, 10), recebido: v.recebido || null,
                    dados: v.dados || null, doServidor: true };
         });
-        // os que ainda existem só neste aparelho continuam na lista,
-        // senão sumiriam antes de o administrador poder criá-los lá
         var nomes = {};
         doServidor.forEach(function (p) { nomes[String(p.usuario).toLowerCase()] = true; });
         var locais = contas.produtores.filter(function (p) {
@@ -1515,6 +1571,19 @@
         });
         contas.produtores = doServidor.concat(locais);
         salvarContas();
+
+        // e os produtores sem login, que viajam junto com a conta do admin
+        sincronizarLivres(tk).then(function (livres) {
+          if (!livres) return;                       // servidor sem a tabela nova
+          var comConta = contas.produtores.filter(function (p) { return p.doServidor; });
+          var usados = {};
+          comConta.forEach(function (p) { usados[String(p.usuario).toLowerCase()] = true; });
+          contas.produtores = comConta.concat(livres.filter(function (p) {
+            return !usados[String(p.usuario).toLowerCase()];
+          }));
+          salvarContas();
+          renderProdutores();
+        });
         var vindas = doServidor.map(function (p) {
           return rest("GET", "registros?produtor_id=eq." + p.id + "&select=data,litros,vacas,obs", null, tk)
             .then(function (rr) {
@@ -2063,13 +2132,15 @@
         if (s) { somaLitros += s.total; comDados++; if (s.sobra !== null) somaSobra += s.sobra; }
         return '<div class="prod-row" data-id="' + p.id + '">' +
           '<div class="prod-nome">' + escapeHtml(p.nome) + "<span>" + escapeHtml(p.usuario) +
-            (p.doServidor ? "" : ' · <b style="color:var(--down)">só neste aparelho</b>') + "</span></div>" +
+            (p.doServidor ? "" : (p.guardado
+              ? ' · <span style="color:var(--muted)">sem login · você guarda</span>'
+              : ' · <b style="color:var(--down)">só neste aparelho</b>')) + "</span></div>" +
           '<div class="prod-num">' + (s ? nL(s.total, 0) + " L" : "—") +
             "<small>" + (p.recebido ? "enviado " + diaCurto(p.recebido) : "nada recebido") + "</small></div>" +
           '<div class="prod-num">' + (s && s.sobra !== null ? nBRL(s.sobra) : "—") + "<small>sobra</small></div>" +
           '<div class="prod-acoes">' +
             (p.dados ? '<button data-ver="' + p.id + '">Abrir</button>' : "") +
-            (!p.doServidor && sessao ? '<button class="btn-primary" data-promover="' + p.id + '">Criar no servidor</button>' : "") +
+            (!p.doServidor && sessao ? '<button data-promover="' + p.id + '">Dar login a ele</button>' : "") +
             (p.doServidor ? "" : '<button data-convite="' + p.id + '">Convite</button>') +
             '<button data-editar="' + p.id + '">Editar</button>' +
           "</div></div>";
@@ -2153,6 +2224,7 @@
               criado: hojeIso(), recebido: null, dados: null, doServidor: !!doServidor
             };
             contas.produtores.push(p);
+            marcarLivresSujo();
             salvarContas();
             renderProdutores();
             mostrarConvite(p, v.senha);
@@ -2194,11 +2266,18 @@
             "O acesso sai da sua lista e os dados que ele já mandou somem daqui. " +
             "Os lançamentos continuam no celular dele.", "Remover", true, function () {
               contas.produtores = contas.produtores.filter(function (o) { return o.id !== p.id; });
+              if (!p.doServidor) {                 // tira também do servidor
+                var lx = lixoDe();
+                lx.produtores = lx.produtores || [];
+                if (lx.produtores.indexOf(p.id) < 0) lx.produtores.push(p.id);
+                guardarLixo(lx);
+              }
               if (vendo && vendo.id === p.id) {
                 vendo = null; leitura = false;
                 document.body.classList.remove("leitura");
                 db = load(); hydrate();
               }
+              marcarLivresSujo();
               salvarContas(); render();
             });
         }
@@ -2211,6 +2290,7 @@
         }
         if (v.senha && v.senha.length < 4) { aviso("A senha precisa de pelo menos 4 caracteres."); return false; }
         p.nome = nome; p.usuario = usuario; p.fazenda = v.fazenda.trim() || nome;
+        marcarLivresSujo();
         if (!v.senha) { salvarContas(); renderProdutores(); return true; }
         return criarSenha(v.senha).then(function (s) {
           p.senha = s;
@@ -2282,6 +2362,7 @@
         if (!p) { btn.textContent = "Produtor não é da sua lista"; return false; }
         p.dados = normalizar(c.corpo.db);
         p.recebido = c.corpo.quando || hojeIso();
+        marcarLivresSujo();
         salvarContas();
         renderProdutores();
         avisar("Dados recebidos", "Chegaram os lançamentos de " + p.nome + ". Toque em Abrir para ver.");
