@@ -1,0 +1,2770 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+</head>
+<body style="margin:0">
+<title>Controle de Produção de Leite</title>
+
+<style>
+  :root {
+    --ground: #f2f5f1;
+    --surface: #ffffff;
+    --surface-2: #e9ede8;
+    --line: #d3dbd2;
+    --line-soft: #e3e9e2;
+    --ink: #141b17;
+    --ink-2: #3c4841;
+    --muted: #6d7a71;
+    --accent: #1f6b5b;
+    --accent-soft: #dcece7;
+    --money: #8a5f13;
+    --money-soft: #f6eddc;
+    --up: #2c7a55;
+    --down: #a8412c;
+    --warn-soft: #fbf1e4;
+    --shadow: 0 1px 2px rgba(20, 27, 23, .06), 0 8px 24px -16px rgba(20, 27, 23, .28);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #10150f; --surface: #171d19; --surface-2: #1f2621;
+      --line: #2e3830; --line-soft: #242c26;
+      --ink: #eef2ec; --ink-2: #c3cdc4; --muted: #8a978d;
+      --accent: #5cbfa4; --accent-soft: #1b3831;
+      --money: #d3a147; --money-soft: #2b2418;
+      --up: #56b98a; --down: #e0765c; --warn-soft: #2b2418;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #10150f; --surface: #171d19; --surface-2: #1f2621;
+    --line: #2e3830; --line-soft: #242c26;
+    --ink: #eef2ec; --ink-2: #c3cdc4; --muted: #8a978d;
+    --accent: #5cbfa4; --accent-soft: #1b3831;
+    --money: #d3a147; --money-soft: #2b2418;
+    --up: #56b98a; --down: #e0765c; --warn-soft: #2b2418;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  }
+  :root[data-theme="light"] {
+    --ground: #f2f5f1; --surface: #ffffff; --surface-2: #e9ede8;
+    --line: #d3dbd2; --line-soft: #e3e9e2;
+    --ink: #141b17; --ink-2: #3c4841; --muted: #6d7a71;
+    --accent: #1f6b5b; --accent-soft: #dcece7;
+    --money: #8a5f13; --money-soft: #f6eddc;
+    --up: #2c7a55; --down: #a8412c; --warn-soft: #fbf1e4;
+    --shadow: 0 1px 2px rgba(20, 27, 23, .06), 0 8px 24px -16px rgba(20, 27, 23, .28);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 26px 20px 72px; display: flex; flex-direction: column; gap: 22px; }
+
+  /* ---------- cabeçalho ---------- */
+
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 14px; padding-bottom: 16px; border-bottom: 2px solid var(--line);
+  }
+  .brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .eyebrow { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .farm-name {
+    font-family: var(--serif); font-size: clamp(25px, 4vw, 34px); font-weight: 600;
+    letter-spacing: -.015em; color: var(--ink); background: transparent;
+    border: none; border-bottom: 1px dashed transparent; padding: 0; width: 100%; max-width: 420px;
+  }
+  .farm-name:hover { border-bottom-color: var(--line); }
+  .farm-name:focus { outline: none; border-bottom-color: var(--accent); }
+
+  /* ---------- botões ---------- */
+
+  button {
+    font-family: var(--sans); font-size: 14px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    padding: 7px 13px; cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+  }
+  button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--muted); }
+  button:disabled { opacity: .38; cursor: default; }
+  button:focus-visible, input:focus-visible, .day-cell:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); filter: brightness(1.08); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 8px; font-size: 13px; }
+  .btn-ghost:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); border-color: transparent; }
+  .chip {
+    font-size: 13px; padding: 5px 11px; border-radius: 20px;
+    background: var(--surface-2); border: 1px solid transparent; color: var(--ink-2);
+  }
+  .chip:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+
+  /* ---------- navegação de quinzena ---------- */
+
+  .period-nav {
+    display: flex; align-items: center; gap: 4px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    padding: 4px; box-shadow: var(--shadow);
+  }
+  .period-label { min-width: 172px; text-align: center; display: flex; flex-direction: column; line-height: 1.2; padding: 2px 6px; }
+  .period-label strong { font-size: 15px; font-weight: 600; }
+  .period-label span { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .nav-btn { padding: 6px 11px; font-family: var(--mono); }
+
+  /* ---------- cartões ---------- */
+
+  section.card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  section.card.focus { border-color: var(--accent); }
+  .card-head {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft);
+  }
+  .card-head h2 { margin: 0; font-family: var(--serif); font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+  .card-head .hint { font-size: 12.5px; color: var(--muted); }
+  .card-body { padding: 18px; }
+
+  /* ---------- primeiro uso ---------- */
+
+  .welcome { display: flex; flex-direction: column; gap: 14px; }
+  .welcome p { margin: 0; color: var(--ink-2); max-width: 62ch; }
+  .steps { display: flex; flex-direction: column; gap: 10px; margin: 4px 0; padding: 0; list-style: none; counter-reset: passo; }
+  .steps li { display: flex; gap: 11px; align-items: baseline; font-size: 14.5px; color: var(--ink-2); }
+  .steps li::before {
+    counter-increment: passo; content: counter(passo);
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--accent);
+    background: var(--accent-soft); border-radius: 50%;
+    width: 21px; height: 21px; flex: 0 0 21px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* ---------- lançamento ---------- */
+
+  .entry-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .entry-top .lbl { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+  .entry-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 14px; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field label { font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .field .sublabel { font-size: 11.5px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+  input {
+    font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 16px;
+    color: var(--ink); background: var(--ground);
+    border: 1px solid var(--line); border-radius: 3px; padding: 10px 11px; width: 100%; min-width: 0;
+  }
+  input[type="text"] { font-family: var(--sans); }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field.big input { font-size: 22px; font-weight: 600; padding: 8px 11px; }
+  .field.wide { grid-column: span 2; }
+  #saveBtn { width: 100%; padding: 11px 14px; font-size: 15px; }
+  .form-msg { font-size: 13.5px; min-height: 20px; margin-top: 12px; color: var(--accent); font-weight: 600; }
+  .form-msg.warn { color: var(--money); }
+
+  .missing {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+    background: var(--warn-soft); border-top: 1px solid var(--line-soft);
+    padding: 11px 18px; font-size: 13.5px; color: var(--ink-2);
+  }
+  .missing .chip { background: var(--surface); font-family: var(--mono); }
+
+  /* ---------- resumo ---------- */
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); gap: 1px; background: var(--line-soft); }
+  .kpi { background: var(--surface); padding: 15px 18px; display: flex; flex-direction: column; gap: 3px; }
+  .kpi .k-label { font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .kpi .k-value { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 27px; line-height: 1.15; letter-spacing: -.02em; }
+  .kpi .k-value small { font-size: 13px; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .kpi .k-value.text { font-family: var(--sans); font-size: 17px; font-weight: 600; line-height: 1.3; }
+  .kpi .k-sub { font-size: 12px; color: var(--muted); }
+  .preco-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
+  .preco-inline input {
+    width: 68px; font-size: 13px; padding: 3px 6px; text-align: right;
+    background: var(--surface); border-color: var(--money);
+    color: var(--money); font-weight: 600;
+  }
+  .preco-inline input:focus { box-shadow: 0 0 0 3px var(--money-soft); border-color: var(--money); }
+  .kpi.is-head { background: var(--accent-soft); }
+  .kpi.is-money .k-value { color: var(--money); }
+
+  .strip {
+    display: flex; flex-wrap: wrap; gap: 6px 26px;
+    padding: 11px 18px; border-top: 1px solid var(--line-soft);
+    font-size: 13px; color: var(--muted);
+  }
+  .strip b { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink-2); }
+
+  .delta { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .delta.up { color: var(--up); }
+  .delta.down { color: var(--down); }
+  .delta.flat { color: var(--muted); }
+
+  /* ---------- gráfico ---------- */
+
+  .chart-scroll { overflow-x: auto; }
+  .chart-inner { min-width: 480px; position: relative; }
+  .chart { position: relative; display: flex; align-items: flex-end; gap: 4px; height: 186px; padding-top: 20px; border-bottom: 1px solid var(--line); }
+  .day-cell {
+    flex: 1 1 0; min-width: 0; height: 100%;
+    display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch;
+    cursor: pointer; background: none; border: none; padding: 0;
+  }
+  .day-cell .val {
+    font-family: var(--mono); font-size: 9.5px; color: var(--muted);
+    opacity: 0; transition: opacity .12s ease; margin-bottom: 3px; text-align: center;
+  }
+  .day-cell:hover .val, .day-cell .val.show { opacity: 1; }
+  .day-cell:hover .bar { filter: brightness(1.12); }
+  .bar { background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; transition: height .22s ease; }
+  .bar.empty { background: transparent; border: 1px dashed var(--line); border-bottom: none; height: 9px !important; }
+  .bar.today { background: var(--money); }
+  .avg-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
+  .meta-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--accent); pointer-events: none; opacity: .8; }
+  .line-tag {
+    position: absolute; right: 0; top: -9px;
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    background: var(--surface); padding: 0 4px;
+  }
+  .meta-line .line-tag { color: var(--accent); right: auto; left: 0; }
+  .axis { display: flex; gap: 4px; margin-top: 6px; }
+  .axis span { flex: 1 1 0; min-width: 0; text-align: center; font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .axis span.on { color: var(--ink); font-weight: 700; }
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
+
+  /* ---------- tabela ---------- */
+
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  thead th {
+    text-align: right; font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 0 12px 9px;
+    border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  thead th:first-child, tbody td:first-child { text-align: left; }
+  tbody td {
+    text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: var(--surface-2); }
+  tbody tr.sel td { background: var(--accent-soft); }
+  td.obs { font-family: var(--sans); color: var(--muted); white-space: normal; min-width: 120px; text-align: left; }
+  td.acts { width: 1%; }
+  .weekend td:first-child { color: var(--muted); }
+  .empty-state { padding: 30px 18px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+  /* ---------- entrada (login) ---------- */
+
+  .gate { min-height: 62vh; display: flex; align-items: center; justify-content: center; padding: 34px 18px; }
+  .gate-box {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+    box-shadow: var(--shadow); max-width: 430px; width: 100%; padding: 26px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .gate-box h1 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin: 2px 0 0; letter-spacing: -.015em; }
+  .gate-box p.sub { margin: 4px 0 14px; font-size: 14px; color: var(--muted); line-height: 1.55; }
+  .gate-form { display: flex; flex-direction: column; gap: 13px; }
+  .gate-form .field label { font-size: 10.5px; }
+  .gate-form button { padding: 11px 14px; font-size: 15px; }
+  .gate-msg { font-size: 13.5px; min-height: 19px; color: var(--down); font-weight: 600; }
+  .gate-alt { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+  .gate-alt button { font-size: 13px; padding: 6px 10px; }
+
+  /* ---------- quem está usando ---------- */
+
+  .quem {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    padding: 9px 14px; margin-bottom: -6px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow);
+    font-size: 13px; color: var(--muted);
+  }
+  .quem strong { color: var(--ink); font-size: 13.5px; }
+  .quem .tag {
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700;
+    color: var(--accent); background: var(--accent-soft); border-radius: 20px; padding: 3px 9px;
+  }
+  .quem .espaco { flex: 1 1 auto; }
+  .quem.olhando { background: var(--warn-soft); border-color: var(--money); }
+  .quem.olhando .tag { color: var(--money); background: var(--money-soft); }
+  body.leitura .card.focus, body.leitura #gastoForm, body.leitura details#settings .tools { display: none; }
+
+  /* ---------- administração ---------- */
+
+  .prod-row {
+    display: grid; grid-template-columns: 1fr 108px 96px auto; align-items: center; gap: 10px;
+    padding: 11px 18px; border-bottom: 1px solid var(--line-soft);
+  }
+  .prod-row:last-child { border-bottom: none; }
+  .prod-nome { font-size: 14px; font-weight: 600; min-width: 0; }
+  .prod-nome span { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); font-family: var(--mono); }
+  .prod-num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; }
+  .prod-num small { display: block; font-family: var(--sans); font-size: 11px; color: var(--muted); }
+  .prod-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+  .prod-acoes button { padding: 5px 9px; font-size: 12.5px; }
+  .codigo {
+    font-family: var(--mono); font-size: 12px; word-break: break-all;
+    background: var(--ground); border: 1px solid var(--line); border-radius: 3px;
+    padding: 10px; max-height: 132px; overflow-y: auto;
+  }
+  @media (max-width: 620px) {
+    .prod-row { grid-template-columns: 1fr auto; row-gap: 6px; }
+    .prod-num { text-align: left; }
+    .prod-acoes { grid-column: 1 / -1; justify-content: flex-start; }
+  }
+
+  /* ---------- histórico ---------- */
+
+  .history { display: flex; flex-direction: column; }
+  .hist-row { display: grid; grid-template-columns: 118px 1fr 96px 132px; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); }
+  .hist-row:last-child { border-bottom: none; }
+  .hist-row.current { background: var(--accent-soft); }
+  .hist-name { font-size: 13.5px; font-weight: 600; }
+  .hist-name span { display: block; font-size: 11px; font-weight: 400; color: var(--muted); font-family: var(--mono); }
+  .hist-track { height: 9px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+  .hist-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+  .hist-total, .hist-delta { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; }
+
+  /* ---------- relatório ---------- */
+
+  pre.report {
+    font-family: var(--mono); font-size: 13px; line-height: 1.65;
+    background: var(--ground); border: 1px solid var(--line); border-radius: 3px;
+    padding: 16px; margin: 0 0 12px; white-space: pre-wrap; word-break: break-word; color: var(--ink-2);
+  }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* ---------- ajustes ---------- */
+
+  details.card > summary {
+    list-style: none; cursor: pointer; padding: 14px 18px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary h2 { margin: 0; font-family: var(--serif); font-size: 18px; font-weight: 600; }
+  details.card > summary .caret { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+  details.card[open] > summary { border-bottom: 1px solid var(--line-soft); }
+  details.card[open] > summary .caret::after { content: "fechar"; }
+  details.card:not([open]) > summary .caret::after { content: "abrir"; }
+
+  /* ---------- janela de confirmação ---------- */
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(10, 16, 12, .55);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+    box-shadow: 0 18px 50px -12px rgba(0, 0, 0, .5);
+    max-width: 430px; width: 100%; padding: 22px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal h3 { margin: 0; font-family: var(--serif); font-size: 19px; font-weight: 600; }
+  .modal p { margin: 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
+  .modal .acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+  .modal .acoes button { padding: 9px 16px; }
+  .modal textarea {
+    font-family: var(--mono); font-size: 12px; line-height: 1.45;
+    color: var(--ink); background: var(--ground);
+    border: 1px solid var(--line); border-radius: 3px;
+    padding: 10px; width: 100%; min-height: 132px; resize: vertical;
+  }
+  .modal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .modal { max-height: 88vh; overflow-y: auto; }
+  .modal img.folha {
+    width: 100%; height: auto; display: block;
+    border: 1px solid var(--line); border-radius: 3px; background: #fff;
+  }
+  .btn-danger { background: var(--down); border-color: var(--down); color: #fff; font-weight: 600; }
+  .btn-danger:hover:not(:disabled) { background: var(--down); border-color: var(--down); filter: brightness(1.1); }
+  #wipeBtn { color: var(--down); border-color: var(--line); background: transparent; }
+  #wipeBtn:hover { background: var(--down); border-color: var(--down); color: #fff; }
+
+  footer.foot { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.7; }
+  footer.foot strong { color: var(--ink-2); }
+
+  @media (max-width: 620px) {
+    .hist-row { grid-template-columns: 92px 1fr 84px; }
+    .hist-row .hist-delta { grid-column: 3; }
+    .hist-track { display: none; }
+    .field.wide { grid-column: span 2; }
+    .kpi .k-value { font-size: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  @media print {
+    .card:not(.print-only), header.top, footer.foot { display: none !important; }
+    .print-only, .print-only * { visibility: visible; }
+    pre.report { border: none; padding: 0; }
+    .tools { display: none; }
+  }
+</style>
+
+<div class="gate" id="gate" hidden>
+  <div class="gate-box">
+    <span class="eyebrow">Controle leiteiro</span>
+    <h1 id="gateTitle">Entrar</h1>
+    <p class="sub" id="gateSub"></p>
+    <div id="gateBody"></div>
+  </div>
+</div>
+
+<div class="wrap" id="app" hidden>
+
+  <div class="quem" id="quem" hidden></div>
+
+  <header class="top">
+    <div class="brand">
+      <span class="eyebrow">Controle leiteiro &middot; fechamento quinzenal</span>
+      <input class="farm-name" id="farmName" value="Produção de Leite" aria-label="Nome da propriedade" />
+    </div>
+    <div class="period-nav">
+      <button class="nav-btn" id="prevPeriod" aria-label="Quinzena anterior" title="Quinzena anterior">&larr;</button>
+      <div class="period-label">
+        <strong id="periodTitle">—</strong>
+        <span id="periodRange">—</span>
+      </div>
+      <button class="nav-btn" id="nextPeriod" aria-label="Próxima quinzena" title="Próxima quinzena">&rarr;</button>
+      <button class="btn-ghost" id="todayBtn">hoje</button>
+    </div>
+  </header>
+
+  <section class="card" id="welcomeCard" hidden>
+    <div class="card-head"><h2>Comece por aqui</h2></div>
+    <div class="card-body welcome">
+      <p>Anote todo dia quantos litros saíram do tanque. O resto o sistema faz sozinho: fecha a conta a cada quinzena e monta o relatório pronto para enviar.</p>
+      <ol class="steps">
+        <li>Lance a produção de hoje no campo abaixo — só a data e os litros são obrigatórios.</li>
+        <li>Informe o preço do litro em <em>Ajustes</em> para acompanhar quanto isso vale em dinheiro.</li>
+        <li>No dia 15 e no último dia do mês a quinzena fecha; use <em>Copiar relatório</em> para mandar no WhatsApp.</li>
+      </ol>
+      <div class="tools">
+        <button id="demoBtn2">Ver funcionando com dados de exemplo</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card focus">
+    <div class="card-head">
+      <h2 id="entryTitle">Lançar produção do dia</h2>
+      <span class="hint">Litros totais do tanque, somando todas as ordenhas</span>
+    </div>
+    <div class="card-body">
+      <div class="entry-top">
+        <span class="lbl">Data:</span>
+        <button type="button" class="chip" id="chipHoje">Hoje</button>
+        <button type="button" class="chip" id="chipOntem">Ontem</button>
+        <input type="date" id="fData" style="width:auto" aria-label="Data do lançamento" />
+      </div>
+      <form class="entry-form" id="entryForm">
+        <div class="field big">
+          <label for="fLitros">Litros do dia</label>
+          <input type="number" id="fLitros" step="0.1" min="0" inputmode="decimal" placeholder="0,0" required />
+        </div>
+        <div class="field">
+          <label for="fVacas">Vacas em lactação <span class="sublabel" id="vacasHint"></span></label>
+          <input type="number" id="fVacas" step="1" min="0" inputmode="numeric" placeholder="opcional" />
+        </div>
+        <div class="field wide">
+          <label for="fObs">Observação <span class="sublabel">opcional</span></label>
+          <input type="text" id="fObs" placeholder="chuva, troca de pasto, vaca secou…" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn-primary" id="saveBtn">Salvar</button>
+        </div>
+      </form>
+      <div class="form-msg" id="formMsg"></div>
+    </div>
+    <div class="missing" id="missing" hidden></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2 id="resumoTitle">Resumo da quinzena</h2>
+      <span class="hint" id="resumoHint">—</span>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="strip" id="strip"></div>
+    <div class="card-body">
+      <div class="chart-scroll">
+        <div class="chart-inner">
+          <div class="chart" id="chart"></div>
+          <div class="axis" id="axis"></div>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <span><i style="background:var(--accent)"></i>produção do dia</span>
+        <span><i style="background:var(--money)"></i>hoje</span>
+        <span><i style="border:1px dashed var(--line)"></i>dia sem lançamento</span>
+        <span>clique numa barra para lançar ou corrigir o dia</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Dia a dia</h2>
+      <span class="hint" id="tableHint">—</span>
+    </div>
+    <div class="table-scroll" id="tableWrap"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Gastos com ração</h2>
+      <span class="hint">Lance cada compra na data em que foi feita</span>
+    </div>
+    <div class="card-body">
+      <form class="entry-form" id="gastoForm">
+        <div class="field">
+          <label for="gData">Data da compra</label>
+          <input type="date" id="gData" required />
+        </div>
+        <div class="field">
+          <label for="gValor">Valor pago <span class="sublabel">R$</span></label>
+          <input type="number" id="gValor" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required />
+        </div>
+        <div class="field">
+          <label for="gKg">Quantidade <span class="sublabel">kg, opcional</span></label>
+          <input type="number" id="gKg" step="0.1" min="0" inputmode="decimal" placeholder="ex.: 1000" />
+        </div>
+        <div class="field wide">
+          <label for="gDesc">O que foi <span class="sublabel">opcional</span></label>
+          <input type="text" id="gDesc" placeholder="ração 18%, farelo de soja, sal mineral…" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn-primary" id="gastoBtn" style="width:100%;padding:11px 14px;font-size:15px">Lançar gasto</button>
+        </div>
+      </form>
+      <div class="form-msg" id="gastoMsg"></div>
+    </div>
+    <div class="table-scroll" id="gastosWrap"></div>
+  </section>
+
+  <section class="card print-only">
+    <div class="card-head">
+      <h2>Relatório da quinzena</h2>
+      <span class="hint">Texto pronto para enviar</span>
+    </div>
+    <div class="card-body">
+      <pre class="report" id="report">—</pre>
+      <div class="tools">
+        <button id="imgReport" class="btn-primary">Salvar em imagem</button>
+        <button id="copyReport">Copiar relatório</button>
+        <button id="printReport">Baixar PDF</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;max-width:62ch">
+        No celular use <strong style="color:var(--ink-2)">Salvar em imagem</strong>: o aplicativo bloqueia o
+        download de arquivos, mas a imagem você segura o dedo e salva ou manda no WhatsApp.
+        O PDF funciona no computador.
+      </p>
+    </div>
+  </section>
+
+  <section class="card" id="adminCard" hidden>
+    <div class="card-head">
+      <h2>Produtores</h2>
+      <span class="hint" id="adminHint">—</span>
+    </div>
+    <div id="prodLista"></div>
+    <div class="card-body">
+      <div class="tools">
+        <button id="novoProdutor" class="btn-primary">Criar acesso de produtor</button>
+        <button id="receberDados">Receber dados de um produtor</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
+        Cada produtor lança no celular dele. Você cria o acesso, manda o código de convite,
+        e quando ele tocar em <strong style="color:var(--ink-2)">Enviar ao administrador</strong>
+        você cola o código aqui para ver a produção dele.
+      </p>
+    </div>
+  </section>
+
+  <section class="card" id="envioCard" hidden>
+    <div class="card-head">
+      <h2>Mandar para o administrador</h2>
+      <span class="hint">Gera um código para você colar no WhatsApp</span>
+    </div>
+    <div class="card-body">
+      <div class="tools">
+        <button id="enviarAdmin" class="btn-primary">Enviar ao administrador</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
+        O código leva todos os seus lançamentos e gastos. Mande sempre que fechar uma quinzena.
+      </p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Quinzenas anteriores</h2>
+      <span class="hint">Clique para abrir uma quinzena</span>
+    </div>
+    <div class="history" id="history"></div>
+  </section>
+
+  <details class="card" id="settings">
+    <summary><h2>Ajustes e dados</h2><span class="caret"></span></summary>
+    <div class="card-body">
+      <div class="entry-form" style="margin-bottom:18px">
+        <div class="field">
+          <label for="fPreco">Preço padrão do litro <span class="sublabel">R$ — usado nas quinzenas sem preço próprio</span></label>
+          <input type="number" id="fPreco" step="0.01" min="0" inputmode="decimal" placeholder="2,15" />
+        </div>
+        <div class="field">
+          <label for="fMeta">Meta por dia <span class="sublabel">litros, opcional</span></label>
+          <input type="number" id="fMeta" step="1" min="0" inputmode="numeric" placeholder="ex.: 600" />
+        </div>
+      </div>
+      <div class="tools">
+        <button id="exportJson">Salvar backup</button>
+        <button id="copyJson">Copiar backup</button>
+        <button id="importBtn">Restaurar backup</button>
+        <button id="exportCsv">Exportar para Excel (CSV)</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+        <button id="demoBtn" class="btn-ghost">Carregar exemplo</button>
+        <button id="wipeBtn">Apagar tudo</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:62ch">
+        Os lançamentos ficam guardados neste aparelho. Vale salvar o backup uma vez por mês.
+        <br /><strong style="color:var(--ink-2)">Passar para outro celular:</strong>
+        toque em <strong style="color:var(--ink-2)">Copiar backup</strong>, cole numa mensagem de WhatsApp
+        para você mesmo e, no outro celular, abra esta mesma página e use
+        <strong style="color:var(--ink-2)">Restaurar backup › Colar texto</strong>.
+      </p>
+    </div>
+  </details>
+
+  <footer class="foot">
+    A quinzena fecha nos dias <strong>15</strong> e no <strong>último dia do mês</strong>.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORE = "controle-leite.v1";
+  var MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
+               "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  var SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+  var CONTAS = "controle-leite.contas.v1";
+  var PREFIXO = "controle-leite.dados.";
+
+  var contas = carregarContas();
+  var conta = null;        // quem está usando este aparelho agora
+  var leitura = false;     // administrador só olhando os dados de um produtor
+  var db = vazio();
+  var view = periodOf(new Date());
+
+  /* ---------------- persistência ---------------- */
+
+  function padraoConfig() {
+    return { fazenda: "Produção de Leite", preco: null, meta: null, ultimasVacas: null };
+  }
+
+  function vazio() { return { registros: {}, gastos: [], precos: {}, config: padraoConfig() }; }
+
+  function normalizar(p) {
+    if (!p || typeof p !== "object") return vazio();
+    return {
+      registros: p.registros || {},
+      gastos: Array.isArray(p.gastos) ? p.gastos : [],
+      precos: p.precos || {},
+      config: Object.assign(padraoConfig(), p.config || {})
+    };
+  }
+
+  function chaveDados(id) { return PREFIXO + id; }
+
+  function load() {
+    if (!conta) return vazio();
+    try { return normalizar(JSON.parse(localStorage.getItem(chaveDados(conta.id)) || "null")); }
+    catch (e) { return vazio(); }
+  }
+
+  function save() {
+    if (!conta || leitura) return;          // olhando dados de outro: não grava
+    try { localStorage.setItem(chaveDados(conta.id), JSON.stringify(db)); } catch (e) {}
+  }
+
+  /* ---------------- contas de acesso ----------------
+     Cada aparelho guarda o seu próprio acesso. O administrador cria
+     os acessos e passa um código de convite; o produtor cola esse
+     código no celular dele. Senha guardada embaralhada (hash), nunca
+     em texto puro — mas isto é uma tranca de conveniência, não
+     protege de quem entende de navegador.                          */
+
+  function carregarContas() {
+    try {
+      var p = JSON.parse(localStorage.getItem(CONTAS) || "null");
+      if (!p || !p.papel) return null;
+      p.produtores = Array.isArray(p.produtores) ? p.produtores : [];
+      return p;
+    } catch (e) { return null; }
+  }
+
+  function salvarContas() {
+    try { localStorage.setItem(CONTAS, JSON.stringify(contas)); } catch (e) {}
+  }
+
+  function novoId() {
+    return "p" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+  }
+
+  function sal() {
+    var b = new Uint8Array(8), i, s = "";
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+    else for (i = 0; i < 8; i++) b[i] = Math.floor(Math.random() * 256);
+    for (i = 0; i < 8; i++) s += ("0" + b[i].toString(16)).slice(-2);
+    return s;
+  }
+
+  // embaralha a senha; devolve promessa porque o navegador faz isso em segundo plano
+  function embaralhar(salgado, senha) {
+    var txt = salgado + "|" + senha;
+    if (window.crypto && crypto.subtle && window.TextEncoder) {
+      return crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt)).then(function (buf) {
+        var b = new Uint8Array(buf), s = "";
+        for (var i = 0; i < b.length; i++) s += ("0" + b[i].toString(16)).slice(-2);
+        return s;
+      }).catch(function () { return simples(txt); });
+    }
+    return Promise.resolve(simples(txt));
+  }
+
+  // reserva, para o caso raro de o navegador não ter o embaralhador pronto
+  function simples(txt) {
+    var h1 = 0x811c9dc5, h2 = 0x1000193;
+    for (var i = 0; i < txt.length; i++) {
+      h1 = ((h1 ^ txt.charCodeAt(i)) * 16777619) >>> 0;
+      h2 = ((h2 + txt.charCodeAt(i) * (i + 7)) * 2654435761) >>> 0;
+    }
+    return "s" + h1.toString(16) + h2.toString(16);
+  }
+
+  function criarSenha(senha) {
+    var s = sal();
+    return embaralhar(s, senha).then(function (h) { return { sal: s, hash: h }; });
+  }
+
+  function conferirSenha(reg, senha) {
+    if (!reg || !reg.sal) return Promise.resolve(false);
+    return embaralhar(reg.sal, senha).then(function (h) { return h === reg.hash; });
+  }
+
+  function usuarioIgual(a, b) {
+    return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+  }
+
+  /* ---------------- códigos de convite e envio ---------------- */
+
+  function codificar(tipo, obj) {
+    return tipo + "." + btoa(unescape(encodeURIComponent(JSON.stringify(obj)))) + ".FIM";
+  }
+
+  // O convite também viaja no fim do endereço (#CONVITE...), para virar link
+  // de um toque. Dentro do artifact isso nunca chega — a moldura não repassa
+  // o endereço —, mas funciona na hora se a página estiver hospedada num
+  // endereço próprio.
+  function conviteDoEndereco() {
+    var t = String(location.hash || "") + " " + String(location.search || "");
+    if (t.indexOf("CONVITE") < 0) return null;
+    var c = null;
+    try { c = decodificar(decodeURIComponent(t)); } catch (e) { c = decodificar(t); }
+    return (c && c.tipo === "CONVITE" && c.corpo && c.corpo.id) ? c.corpo : null;
+  }
+
+  function limparEndereco() {
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
+
+  // a página sabe se está dentro da moldura do artifact ou solta num endereço próprio
+  function dentroDaMoldura() {
+    try { return window.top !== window.self; } catch (e) { return true; }
+  }
+
+  function linkConvite(cod) {
+    return location.origin + location.pathname + "#" + cod;
+  }
+
+  // aceita a mensagem inteira colada do WhatsApp: acha o código no meio do recado
+  function decodificar(txt) {
+    var t = String(txt || "").replace(/\s+/g, "");
+    var m = /(CONVITE|ENVIO)\.([A-Za-z0-9+/=]+)\.FIM/.exec(t);
+    if (!m) return null;
+    try {
+      return { tipo: m[1], corpo: JSON.parse(decodeURIComponent(escape(atob(m[2])))) };
+    } catch (e) { return null; }
+  }
+
+  /* ---------------- janela de confirmação ----------------
+     Não usamos confirm()/alert() do navegador: em página incorporada
+     eles podem ser bloqueados e o botão parece não funcionar.        */
+
+  function perguntar(titulo, detalhe, textoOk, perigo, aoConfirmar, textoAlt, aoAlt) {
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>" + escapeHtml(titulo) + "</h3>" +
+        (detalhe ? "<p>" + escapeHtml(detalhe) + "</p>" : "") +
+        '<div class="acoes">' +
+          '<button type="button" data-no>Cancelar</button>' +
+          (textoAlt ? '<button type="button" data-alt>' + escapeHtml(textoAlt) + "</button>" : "") +
+          '<button type="button" data-yes class="' + (perigo ? "btn-danger" : "btn-primary") + '">' +
+            escapeHtml(textoOk) + "</button>" +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    function fechar() {
+      document.removeEventListener("keydown", tecla);
+      if (over.parentNode) over.parentNode.removeChild(over);
+    }
+    function tecla(e) { if (e.key === "Escape") fechar(); }
+
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    var alt = over.querySelector("[data-alt]");
+    if (alt) alt.addEventListener("click", function () {
+      fechar();
+      if (aoAlt) aoAlt();
+    });
+    over.querySelector("[data-yes]").addEventListener("click", function () {
+      fechar();
+      if (aoConfirmar) aoConfirmar();
+    });
+    over.addEventListener("click", function (e) { if (e.target === over) fechar(); });
+    document.addEventListener("keydown", tecla);
+    over.querySelector("[data-yes]").focus();
+  }
+
+  function avisar(titulo, detalhe) {
+    perguntar(titulo, detalhe, "Entendi", false, null);
+  }
+
+  /* ---------------- copiar e colar ---------------- */
+
+  function copiarTexto(txt, aoCopiar, aoFalhar) {
+    function naMao() {
+      var ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.style.position = "fixed"; ta.style.top = "0"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { ta.setSelectionRange(0, txt.length); } catch (e) {}
+      var deu = false;
+      try { deu = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      if (deu) aoCopiar(); else if (aoFalhar) aoFalhar();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(aoCopiar, naMao);
+    } else naMao();
+  }
+
+  // janela com um campo de texto grande: serve para copiar o backup na mão
+  // e também para colar o backup vindo de outro celular.
+  function janelaTexto(op) {
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>" + escapeHtml(op.titulo) + "</h3>" +
+        (op.detalhe ? "<p>" + escapeHtml(op.detalhe) + "</p>" : "") +
+        "<textarea " + (op.leitura ? "readonly" : 'placeholder="Cole aqui o texto do backup"') +
+          ' spellcheck="false">' + escapeHtml(op.valor || "") + "</textarea>" +
+        '<div class="acoes">' +
+          '<button type="button" data-no>Fechar</button>' +
+          '<button type="button" data-yes class="btn-primary">' + escapeHtml(op.textoOk) + "</button>" +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    var ta = over.querySelector("textarea");
+    var btnOk = over.querySelector("[data-yes]");
+    function fechar() {
+      document.removeEventListener("keydown", tecla);
+      if (over.parentNode) over.parentNode.removeChild(over);
+    }
+    function tecla(e) { if (e.key === "Escape") fechar(); }
+
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    btnOk.addEventListener("click", function () {
+      // devolver false mantém a janela aberta (ex.: aviso de "Copiado")
+      if (op.aoConfirmar && op.aoConfirmar(ta.value, btnOk) === false) return;
+      fechar();
+    });
+    document.addEventListener("keydown", tecla);
+    // se o botão virou aviso ("Texto inválido"), volta ao normal ao digitar
+    ta.addEventListener("input", function () {
+      if (btnOk.textContent !== op.textoOk) btnOk.textContent = op.textoOk;
+    });
+    ta.focus();
+    if (op.leitura) { try { ta.setSelectionRange(0, 0); } catch (e) {} }
+  }
+
+  /* ---------------- entrega de arquivos ----------------
+     No celular, dentro do aplicativo, o link de download costuma ser
+     ignorado sem avisar. Tentamos nesta ordem: compartilhar (o jeito
+     do celular), salvar pelo próprio Claude, o link tradicional (o
+     jeito do computador) e, por fim, mostrar o conteúdo para copiar. */
+
+  function noCelular() {
+    try { return window.matchMedia("(pointer: coarse)").matches; } catch (e) { return false; }
+  }
+
+  function entregar(nome, blob, alternativa) {
+    var arquivo = null;
+    try { arquivo = new File([blob], nome, { type: blob.type }); } catch (e) { arquivo = null; }
+
+    function planoCompartilhar() {
+      var pode = false;
+      try { pode = !!(arquivo && navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })); }
+      catch (e) { pode = false; }
+      if (!pode) return planoClaude();
+      navigator.share({ files: [arquivo], title: nome }).then(function () {}, function (e) {
+        if (e && e.name === "AbortError") return;   // o usuário fechou de propósito
+        planoClaude();
+      });
+    }
+
+    function planoClaude() {
+      var cap = window.claude && window.claude.downloads;
+      if (!cap || !cap.save) return planoLink();
+      cap.save({ filename: nome, data: blob }).then(function () {}, function (err) {
+        if (err && err.code === "declined") return;   // o usuário recusou
+        planoLink();
+      });
+    }
+
+    function planoLink() {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = nome; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      if (noCelular()) planoManual(url);
+      else setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    }
+
+    function planoManual(url) {
+      var extra = alternativa && alternativa.extra;
+      var over = document.createElement("div");
+      over.className = "overlay";
+      over.innerHTML =
+        '<div class="modal" role="dialog" aria-modal="true">' +
+          "<h3>O celular bloqueou o download</h3>" +
+          "<p>Dentro do aplicativo esta página não tem permissão para salvar arquivos — " +
+          "não é problema do seu aparelho. Use uma destas saídas:</p>" +
+          '<div class="acoes">' +
+            '<button type="button" data-no>Fechar</button>' +
+            (alternativa && alternativa.texto
+              ? '<button type="button" data-copy>' + escapeHtml(alternativa.rotulo || "Copiar o conteúdo") + "</button>"
+              : "") +
+            (extra ? '<button type="button" data-extra class="btn-primary">' + escapeHtml(extra.rotulo) + "</button>" : "") +
+          "</div></div>";
+      document.body.appendChild(over);
+
+      var be = over.querySelector("[data-extra]");
+      if (be) be.addEventListener("click", function () { fechar(); extra.acao(); });
+
+      function fechar() {
+        document.removeEventListener("keydown", tecla);
+        if (over.parentNode) over.parentNode.removeChild(over);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      }
+      function tecla(e) { if (e.key === "Escape") fechar(); }
+      over.querySelector("[data-no]").addEventListener("click", fechar);
+      over.addEventListener("click", function (e) { if (e.target === over) fechar(); });
+      document.addEventListener("keydown", tecla);
+
+      var bc = over.querySelector("[data-copy]");
+      if (bc) bc.addEventListener("click", function () {
+        copiarTexto(alternativa.texto, function () {
+          bc.textContent = "Copiado";
+          setTimeout(fechar, 900);
+        }, function () {
+          fechar();
+          janelaTexto({
+            titulo: "Copie na mão",
+            detalhe: "Segure o dedo no texto, selecione tudo e copie.",
+            valor: alternativa.texto, leitura: true, textoOk: "Pronto"
+          });
+        });
+      });
+    }
+
+    planoCompartilhar();
+  }
+
+  /* ---------------- janela com campos ---------------- */
+
+  function janelaForm(op) {
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>" + escapeHtml(op.titulo) + "</h3>" +
+        (op.detalhe ? "<p>" + escapeHtml(op.detalhe) + "</p>" : "") +
+        '<div class="gate-form">' + campoHtml(op.campos) + "</div>" +
+        '<div class="gate-msg" data-msg></div>' +
+        '<div class="acoes">' +
+          (op.extra ? '<button type="button" data-extra class="btn-ghost" style="margin-right:auto">' +
+            escapeHtml(op.extra.rotulo) + "</button>" : "") +
+          '<button type="button" data-no>Cancelar</button>' +
+          '<button type="button" data-yes class="btn-primary">' + escapeHtml(op.textoOk) + "</button>" +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    var btnOk = over.querySelector("[data-yes]");
+    var aviso = over.querySelector("[data-msg]");
+    var btnExtra = over.querySelector("[data-extra]");
+    if (btnExtra) btnExtra.addEventListener("click", function () { fechar(); op.extra.acao(); });
+    function fechar() {
+      document.removeEventListener("keydown", tecla);
+      if (over.parentNode) over.parentNode.removeChild(over);
+    }
+    function tecla(e) { if (e.key === "Escape") fechar(); }
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    document.addEventListener("keydown", tecla);
+
+    function enviar() {
+      aviso.textContent = "";
+      var vals = {};
+      op.campos.forEach(function (c) { vals[c.id] = over.querySelector("#f_" + c.id).value; });
+      var r = op.aoConfirmar ? op.aoConfirmar(vals, function (t) { aviso.textContent = t; }) : true;
+      if (r && typeof r.then === "function") {
+        btnOk.disabled = true;
+        r.then(function (ok) { btnOk.disabled = false; if (ok !== false) fechar(); },
+               function () { btnOk.disabled = false; aviso.textContent = "Não deu certo, tente de novo."; });
+        return;
+      }
+      if (r !== false) fechar();
+    }
+    btnOk.addEventListener("click", enviar);
+    over.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); enviar(); }
+    });
+    var p = over.querySelector("input");
+    if (p) p.focus();
+  }
+
+  function campoHtml(campos) {
+    return campos.map(function (c) {
+      return '<div class="field"><label for="f_' + c.id + '">' + escapeHtml(c.label) +
+        (c.dica ? ' <span class="sublabel">' + escapeHtml(c.dica) + "</span>" : "") + "</label>" +
+        '<input id="f_' + c.id + '" type="' + (c.tipo || "text") + '" ' +
+        (c.tipo === "password" ? 'autocomplete="off" ' : "") +
+        'value="' + escapeHtml(c.valor || "") + '" ' +
+        'placeholder="' + escapeHtml(c.placeholder || "") + '" /></div>';
+    }).join("");
+  }
+
+  /* ---------------- tela de entrada ---------------- */
+
+  function gate(estado) {
+    var g = document.getElementById("gate");
+    document.getElementById("app").hidden = true;
+    g.hidden = false;
+    var tit = document.getElementById("gateTitle");
+    var sub = document.getElementById("gateSub");
+    var corpo = document.getElementById("gateBody");
+
+    if (estado === "inicio") {
+      tit.textContent = "Primeiro acesso";
+      sub.textContent = "Este aparelho ainda não tem acesso. Se você comanda o controle, crie o acesso de administrador. " +
+        "Se o administrador te mandou um código de convite, use a segunda opção.";
+      corpo.innerHTML =
+        '<div class="gate-form">' +
+          '<button class="btn-primary" data-ir="admin-novo">Sou o administrador</button>' +
+          '<button data-ir="convite">Recebi um código de convite</button>' +
+        "</div>";
+      corpo.querySelector('[data-ir="admin-novo"]').addEventListener("click", function () { gate("admin-novo"); });
+      corpo.querySelector('[data-ir="convite"]').addEventListener("click", function () { gate("convite"); });
+      return;
+    }
+
+    if (estado === "admin-novo") {
+      tit.textContent = "Criar administrador";
+      sub.textContent = "É você quem vai criar os acessos dos produtores. Guarde bem esta senha: " +
+        "sem servidor, não existe recuperar senha esquecida.";
+      corpo.innerHTML =
+        '<div class="gate-form">' +
+          campoHtml([
+            { id: "nome", label: "Seu nome", placeholder: "ex.: João da Silva" },
+            { id: "usuario", label: "Usuário", dica: "para entrar", placeholder: "ex.: joao" },
+            { id: "senha", label: "Senha", tipo: "password" },
+            { id: "senha2", label: "Repita a senha", tipo: "password" }
+          ]) +
+          '<div class="gate-msg" data-msg></div>' +
+          '<button class="btn-primary" data-ok>Criar acesso</button>' +
+        "</div>" +
+        '<div class="gate-alt"><button data-voltar>Voltar</button></div>';
+      var av = corpo.querySelector("[data-msg]");
+      corpo.querySelector("[data-voltar]").addEventListener("click", function () { gate("inicio"); });
+      corpo.querySelector("[data-ok]").addEventListener("click", function () {
+        var v = {};
+        ["nome", "usuario", "senha", "senha2"].forEach(function (k) { v[k] = corpo.querySelector("#f_" + k).value.trim(); });
+        if (!v.nome || !v.usuario) { av.textContent = "Preencha o nome e o usuário."; return; }
+        if (v.senha.length < 4) { av.textContent = "A senha precisa de pelo menos 4 caracteres."; return; }
+        if (v.senha !== v.senha2) { av.textContent = "As duas senhas não são iguais."; return; }
+        this.disabled = true;
+        criarSenha(v.senha).then(function (s) {
+          contas = {
+            papel: "admin",
+            eu: { id: "admin", nome: v.nome, usuario: v.usuario, senha: s },
+            produtores: [],
+            sessao: "admin"
+          };
+          // aproveita os lançamentos que já existiam neste aparelho
+          var antigo = localStorage.getItem(STORE);
+          if (antigo && !localStorage.getItem(chaveDados("admin"))) {
+            try { localStorage.setItem(chaveDados("admin"), antigo); } catch (e) {}
+          }
+          salvarContas();
+          entrar(contas.eu);
+        });
+      });
+      return;
+    }
+
+    if (estado === "convite") {
+      tit.textContent = "Código de convite";
+      sub.textContent = "Cole abaixo o código que o administrador te mandou. Ele só precisa ser usado uma vez neste celular.";
+      corpo.innerHTML =
+        '<div class="gate-form">' +
+          '<textarea data-cod placeholder="Cole aqui o código" spellcheck="false" ' +
+            'style="font-family:var(--mono);font-size:12px;min-height:120px;padding:10px;' +
+            'border:1px solid var(--line);border-radius:3px;background:var(--ground);color:var(--ink);width:100%"></textarea>' +
+          '<div class="gate-msg" data-msg></div>' +
+          '<button class="btn-primary" data-ok>Usar convite</button>' +
+        "</div>" +
+        '<div class="gate-alt"><button data-colar>Colar do que copiei</button>' +
+        "<button data-voltar>Voltar</button></div>";
+      var av2 = corpo.querySelector("[data-msg]");
+      corpo.querySelector("[data-voltar]").addEventListener("click", function () { gate(contas ? "login" : "inicio"); });
+      corpo.querySelector("[data-ok]").addEventListener("click", function () {
+        var c = decodificar(corpo.querySelector("[data-cod]").value);
+        if (!c || c.tipo !== "CONVITE" || !c.corpo || !c.corpo.id) {
+          av2.textContent = "Código inválido. Copie o código inteiro que o administrador mandou.";
+          return;
+        }
+        aplicarConvite(c.corpo);
+      });
+      var colar = corpo.querySelector("[data-colar]");
+      if (colar) colar.addEventListener("click", function () {
+        var b = this;
+        if (!navigator.clipboard || !navigator.clipboard.readText) {
+          b.textContent = "Cole na mão aí em cima"; return;
+        }
+        navigator.clipboard.readText().then(function (t) {
+          corpo.querySelector("[data-cod]").value = t;
+          b.textContent = "Colado";
+        }, function () { b.textContent = "Cole na mão aí em cima"; });
+      });
+      return;
+    }
+
+    // login
+    tit.textContent = "Entrar";
+    sub.textContent = contas.papel === "admin"
+      ? "Acesso do administrador."
+      : "Acesso de " + contas.eu.nome + ".";
+    corpo.innerHTML =
+      '<div class="gate-form">' +
+        campoHtml([
+          { id: "usuario", label: "Usuário", valor: contas.eu.usuario },
+          { id: "senha", label: "Senha", tipo: "password" }
+        ]) +
+        '<div class="gate-msg" data-msg></div>' +
+        '<button class="btn-primary" data-ok>Entrar</button>' +
+      "</div>" +
+      '<div class="gate-alt">' +
+        '<button data-ir="convite">Usar um código de convite</button>' +
+        '<button data-zerar class="btn-ghost">Esqueci a senha</button>' +
+      "</div>";
+    var av3 = corpo.querySelector("[data-msg]");
+    var btn = corpo.querySelector("[data-ok]");
+
+    function tentar() {
+      var u = corpo.querySelector("#f_usuario").value;
+      var s = corpo.querySelector("#f_senha").value;
+      av3.textContent = "";
+      if (!usuarioIgual(u, contas.eu.usuario)) { av3.textContent = "Usuário ou senha errados."; return; }
+      btn.disabled = true;
+      conferirSenha(contas.eu.senha, s).then(function (ok) {
+        btn.disabled = false;
+        if (!ok) { av3.textContent = "Usuário ou senha errados."; return; }
+        contas.sessao = contas.eu.id;
+        salvarContas();
+        entrar(contas.eu);
+      });
+    }
+    btn.addEventListener("click", tentar);
+    corpo.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); tentar(); }
+    });
+    corpo.querySelector('[data-ir="convite"]').addEventListener("click", function () { gate("convite"); });
+    corpo.querySelector("[data-zerar]").addEventListener("click", function () {
+      avisar("Senha esquecida", contas.papel === "admin"
+        ? "Sem servidor não dá para recuperar a senha do administrador. A saída é apagar o acesso deste aparelho e criar de novo — os lançamentos continuam guardados, mas guarde um backup antes por segurança."
+        : "Peça ao administrador. Ele consegue trocar a sua senha e te mandar um convite novo.");
+    });
+  }
+
+  // grava o acesso do produtor neste aparelho, venha o convite do link ou colado
+  function aplicarConvite(c) {
+    function gravar() {
+      contas = {
+        papel: "produtor",
+        eu: { id: c.id, nome: c.nome, usuario: c.usuario, senha: c.senha },
+        produtores: [],
+        sessao: null
+      };
+      salvarContas();
+      if (!localStorage.getItem(chaveDados(c.id))) {
+        var d = normalizar(null);
+        if (c.fazenda) d.config.fazenda = c.fazenda;
+        try { localStorage.setItem(chaveDados(c.id), JSON.stringify(d)); } catch (e) {}
+      }
+      limparEndereco();
+      gate("login");
+      avisar("Convite aceito", "Pronto, " + c.nome + ". Agora entre com o usuário " +
+        c.usuario + " e a senha que o administrador te passou.");
+    }
+
+    // já tem outro acesso neste aparelho? pergunta antes de trocar
+    if (contas && contas.eu && contas.eu.id !== c.id) {
+      perguntar("Trocar o acesso deste aparelho?",
+        "Agora ele está com o acesso de " + contas.eu.nome + ". O convite é de " + c.nome +
+        ". Os lançamentos de cada um continuam guardados, separados.",
+        "Trocar para " + c.nome, false, gravar);
+      return;
+    }
+    if (contas && contas.eu && contas.eu.id === c.id) {
+      contas.eu = { id: c.id, nome: c.nome, usuario: c.usuario, senha: c.senha };
+      salvarContas();
+      limparEndereco();
+      gate("login");
+      avisar("Acesso atualizado", "Convite novo aplicado. Entre com a senha que o administrador te passou agora.");
+      return;
+    }
+    gravar();
+  }
+
+  /* ---------------- entrar e sair ---------------- */
+
+  function entrar(c) {
+    conta = c;
+    leitura = false;
+    db = load();
+    iniciarApp();
+  }
+
+  function sair() {
+    contas.sessao = null;
+    salvarContas();
+    conta = null; leitura = false; db = vazio();
+    document.body.classList.remove("leitura");
+    gate("login");
+  }
+
+  function renderQuem() {
+    var el = document.getElementById("quem");
+    if (!conta) { el.hidden = true; return; }
+    el.hidden = false;
+    el.className = "quem" + (leitura ? " olhando" : "");
+    if (leitura) {
+      el.innerHTML = '<span class="tag">Só olhando</span><strong>' + escapeHtml(db.config.fazenda) +
+        "</strong><span>dados enviados por " + escapeHtml(vendo ? vendo.nome : "") + "</span>" +
+        '<span class="espaco"></span><button id="voltarAdmin" class="btn-primary">Voltar para os meus dados</button>';
+      el.querySelector("#voltarAdmin").addEventListener("click", function () {
+        vendo = null; leitura = false;
+        document.body.classList.remove("leitura");
+        db = load(); hydrate(); render();
+      });
+      travarCampos(true);
+      return;
+    }
+    travarCampos(false);
+    el.innerHTML = '<span class="tag">' + (contas.papel === "admin" ? "Administrador" : "Produtor") + "</span>" +
+      "<strong>" + escapeHtml(conta.nome) + "</strong>" +
+      '<span>' + escapeHtml(conta.usuario) + "</span>" +
+      '<span class="espaco"></span><button id="sairBtn" class="btn-ghost">Sair</button>';
+    el.querySelector("#sairBtn").addEventListener("click", sair);
+  }
+
+  // enquanto o administrador só olha, nada nesta tela pode ser mexido
+  function travarCampos(travar) {
+    ["farmName", "fPreco", "fMeta"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.readOnly = travar;
+    });
+  }
+
+  /* ---------------- administração dos produtores ---------------- */
+
+  var vendo = null;   // produtor que o administrador está olhando
+
+  function comDb(x, fn) {
+    var a = db, b = leitura;
+    db = x; leitura = true;
+    try { return fn(); } finally { db = a; leitura = b; }
+  }
+
+  function statsDe(p) {
+    return comDb(normalizar(p.dados), function () { return stats(view); });
+  }
+
+  function renderProdutores() {
+    if (!contas || contas.papel !== "admin") return;
+    var lista = contas.produtores;
+    var el = document.getElementById("prodLista");
+    var somaLitros = 0, somaSobra = 0, comDados = 0;
+
+    if (!lista.length) {
+      el.innerHTML = '<div class="empty-state">Nenhum produtor cadastrado ainda.<br />' +
+        "Use o botão abaixo para criar o primeiro acesso.</div>";
+    } else {
+      el.innerHTML = lista.map(function (p) {
+        var s = p.dados ? statsDe(p) : null;
+        if (s) { somaLitros += s.total; comDados++; if (s.sobra !== null) somaSobra += s.sobra; }
+        return '<div class="prod-row" data-id="' + p.id + '">' +
+          '<div class="prod-nome">' + escapeHtml(p.nome) + "<span>" + escapeHtml(p.usuario) + "</span></div>" +
+          '<div class="prod-num">' + (s ? nL(s.total, 0) + " L" : "—") +
+            "<small>" + (p.recebido ? "enviado " + diaCurto(p.recebido) : "nada recebido") + "</small></div>" +
+          '<div class="prod-num">' + (s && s.sobra !== null ? nBRL(s.sobra) : "—") + "<small>sobra</small></div>" +
+          '<div class="prod-acoes">' +
+            (p.dados ? '<button data-ver="' + p.id + '">Abrir</button>' : "") +
+            '<button data-convite="' + p.id + '">Convite</button>' +
+            '<button data-editar="' + p.id + '">Editar</button>' +
+          "</div></div>";
+      }).join("");
+
+      el.querySelectorAll("[data-ver]").forEach(function (b) {
+        b.addEventListener("click", function () { abrirProdutor(this.getAttribute("data-ver")); });
+      });
+      el.querySelectorAll("[data-convite]").forEach(function (b) {
+        b.addEventListener("click", function () { mostrarConvite(acharProdutor(this.getAttribute("data-convite"))); });
+      });
+      el.querySelectorAll("[data-editar]").forEach(function (b) {
+        b.addEventListener("click", function () { editarProdutor(acharProdutor(this.getAttribute("data-editar"))); });
+      });
+    }
+
+    document.getElementById("adminHint").textContent = !lista.length ? "—"
+      : lista.length + " produtor" + (lista.length > 1 ? "es" : "") + " · " +
+        comDados + " com dados · " + nL(somaLitros, 0) + " L na quinzena" +
+        (somaSobra ? " · sobra de " + nBRL(somaSobra) : "");
+  }
+
+  function acharProdutor(id) {
+    return contas.produtores.filter(function (p) { return p.id === id; })[0] || null;
+  }
+
+  function abrirProdutor(id) {
+    var p = acharProdutor(id);
+    if (!p || !p.dados) return;
+    vendo = p;
+    leitura = true;
+    db = normalizar(p.dados);
+    document.body.classList.add("leitura");
+    hydrate();
+    render();
+    document.getElementById("quem").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function criarProdutor() {
+    janelaForm({
+      titulo: "Criar acesso de produtor",
+      detalhe: "Depois de criar, mande o código de convite para o produtor abrir no celular dele.",
+      campos: [
+        { id: "nome", label: "Nome do produtor", placeholder: "ex.: Maria Souza" },
+        { id: "fazenda", label: "Nome da propriedade", dica: "opcional", placeholder: "ex.: Sítio Boa Vista" },
+        { id: "usuario", label: "Usuário", placeholder: "ex.: maria" },
+        { id: "senha", label: "Senha", tipo: "password", dica: "você define e passa para ele" }
+      ],
+      textoOk: "Criar acesso",
+      aoConfirmar: function (v, aviso) {
+        var nome = v.nome.trim(), usuario = v.usuario.trim();
+        if (!nome || !usuario) { aviso("Preencha o nome e o usuário."); return false; }
+        if (v.senha.length < 4) { aviso("A senha precisa de pelo menos 4 caracteres."); return false; }
+        if (contas.produtores.some(function (p) { return usuarioIgual(p.usuario, usuario); })) {
+          aviso("Já existe um produtor com esse usuário."); return false;
+        }
+        return criarSenha(v.senha).then(function (s) {
+          var p = {
+            id: novoId(), nome: nome, usuario: usuario, senha: s,
+            fazenda: v.fazenda.trim() || nome,
+            criado: hojeIso(), recebido: null, dados: null
+          };
+          contas.produtores.push(p);
+          salvarContas();
+          renderProdutores();
+          mostrarConvite(p, v.senha);
+          return true;
+        });
+      }
+    });
+  }
+
+  function editarProdutor(p) {
+    if (!p) return;
+    janelaForm({
+      titulo: "Editar " + p.nome,
+      detalhe: "Deixe a senha em branco para manter a atual. Trocando a senha, mande o convite novo para ele.",
+      campos: [
+        { id: "nome", label: "Nome do produtor", valor: p.nome },
+        { id: "fazenda", label: "Nome da propriedade", valor: p.fazenda || "" },
+        { id: "usuario", label: "Usuário", valor: p.usuario },
+        { id: "senha", label: "Nova senha", tipo: "password", dica: "opcional" }
+      ],
+      textoOk: "Salvar",
+      extra: {
+        rotulo: "Remover",
+        acao: function () {
+          perguntar("Remover " + p.nome + "?",
+            "O acesso sai da sua lista e os dados que ele já mandou somem daqui. " +
+            "Os lançamentos continuam no celular dele.", "Remover", true, function () {
+              contas.produtores = contas.produtores.filter(function (o) { return o.id !== p.id; });
+              if (vendo && vendo.id === p.id) {
+                vendo = null; leitura = false;
+                document.body.classList.remove("leitura");
+                db = load(); hydrate();
+              }
+              salvarContas(); render();
+            });
+        }
+      },
+      aoConfirmar: function (v, aviso) {
+        var nome = v.nome.trim(), usuario = v.usuario.trim();
+        if (!nome || !usuario) { aviso("Preencha o nome e o usuário."); return false; }
+        if (contas.produtores.some(function (o) { return o.id !== p.id && usuarioIgual(o.usuario, usuario); })) {
+          aviso("Já existe outro produtor com esse usuário."); return false;
+        }
+        if (v.senha && v.senha.length < 4) { aviso("A senha precisa de pelo menos 4 caracteres."); return false; }
+        p.nome = nome; p.usuario = usuario; p.fazenda = v.fazenda.trim() || nome;
+        if (!v.senha) { salvarContas(); renderProdutores(); return true; }
+        return criarSenha(v.senha).then(function (s) {
+          p.senha = s;
+          salvarContas();
+          renderProdutores();
+          mostrarConvite(p, v.senha);
+          return true;
+        });
+      }
+    });
+  }
+
+  function mostrarConvite(p, senhaClara) {
+    if (!p) return;
+    var cod = codificar("CONVITE", {
+      id: p.id, nome: p.nome, usuario: p.usuario, senha: p.senha, fazenda: p.fazenda
+    });
+    var porLink = !dentroDaMoldura();
+    var recado = "Convite do controle leiteiro\n\n" +
+      "Produtor: " + p.nome + "\n" +
+      "Usuário: " + p.usuario + "\n" +
+      (senhaClara ? "Senha: " + senhaClara + "\n" : "") +
+      (porLink
+        ? "\nÉ só tocar neste link e entrar:\n\n" + linkConvite(cod)
+        : "\nAbra o link do controle no seu celular, toque em “Recebi um código de convite” e cole isto:\n\n" + cod);
+
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>Convite de " + escapeHtml(p.nome) + "</h3>" +
+        "<p>Mande este recado para o produtor. " +
+        (porLink ? "Ele toca no link e o acesso já entra sozinho. " : "") +
+        (senhaClara ? "A senha aparece aqui uma vez só — anote se precisar." :
+          "A senha não aparece mais; se ele esqueceu, use Editar e defina uma nova.") + "</p>" +
+        (porLink ? "" : '<p style="font-size:13px">Neste endereço o convite não pode virar link: ' +
+          "a moldura do Claude não repassa o endereço para a página. Com a página hospedada num " +
+          "endereço próprio, este mesmo botão passa a gerar um link de um toque.</p>") +
+        '<div class="codigo">' + escapeHtml(recado) + "</div>" +
+        '<div class="acoes">' +
+          '<button type="button" data-no>Fechar</button>' +
+          '<button type="button" data-copy class="btn-primary">Copiar convite</button>' +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    function fechar() { if (over.parentNode) over.parentNode.removeChild(over); }
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    over.querySelector("[data-copy]").addEventListener("click", function () {
+      var b = this;
+      copiarTexto(recado, function () {
+        b.textContent = "Convite copiado";
+        setTimeout(fechar, 1000);
+      }, function () {
+        fechar();
+        janelaTexto({ titulo: "Copie o convite na mão", valor: recado, leitura: true, textoOk: "Pronto" });
+      });
+    });
+  }
+
+  function receberDados() {
+    janelaTexto({
+      titulo: "Receber dados de um produtor",
+      detalhe: "Cole o código que o produtor mandou.",
+      valor: "", leitura: false, textoOk: "Receber",
+      aoConfirmar: function (valor, btn) {
+        var c = decodificar(valor);
+        if (!c || c.tipo !== "ENVIO" || !c.corpo || !c.corpo.id) { btn.textContent = "Código inválido"; return false; }
+        var p = acharProdutor(c.corpo.id);
+        if (!p) { btn.textContent = "Produtor não é da sua lista"; return false; }
+        p.dados = normalizar(c.corpo.db);
+        p.recebido = c.corpo.quando || hojeIso();
+        salvarContas();
+        renderProdutores();
+        avisar("Dados recebidos", "Chegaram os lançamentos de " + p.nome + ". Toque em Abrir para ver.");
+        return true;
+      }
+    });
+  }
+
+  function enviarAoAdmin() {
+    if (!totalGeral() && !db.gastos.length) {
+      avisar("Nada para enviar", "Lance ao menos um dia de produção antes.");
+      return;
+    }
+    var cod = codificar("ENVIO", { id: conta.id, nome: conta.nome, quando: hojeIso(), db: db });
+    var recado = "Produção de " + conta.nome + " até " + diaCurto(hojeIso()) + "\n\n" + cod;
+    copiarTexto(recado, function () {
+      avisar("Código copiado", "Agora é só colar numa mensagem para o administrador. " +
+        "Ele cola em “Receber dados de um produtor” e vê tudo.");
+    }, function () {
+      janelaTexto({
+        titulo: "Copie e mande para o administrador",
+        detalhe: "Segure o dedo no texto, selecione tudo e copie.",
+        valor: recado, leitura: true, textoOk: "Pronto"
+      });
+    });
+  }
+
+  /* ---------------- datas ---------------- */
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function iso(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parseIso(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+  function hojeIso() { return iso(new Date()); }
+  function diaCurto(k) { var d = parseIso(k); return pad(d.getDate()) + "/" + pad(d.getMonth() + 1); }
+
+  function periodOf(d) { return { y: d.getFullYear(), m: d.getMonth(), q: d.getDate() <= 15 ? 1 : 2 }; }
+  function periodKey(p) { return p.y + "-" + pad(p.m + 1) + "-Q" + p.q; }
+  function periodDays(p) {
+    var first = p.q === 1 ? 1 : 16;
+    var last = p.q === 1 ? 15 : daysInMonth(p.y, p.m);
+    var out = [];
+    for (var d = first; d <= last; d++) out.push(iso(new Date(p.y, p.m, d)));
+    return out;
+  }
+  function shiftPeriod(p, step) {
+    var q = p.q + step, y = p.y, m = p.m;
+    while (q > 2) { q -= 2; m++; if (m > 11) { m = 0; y++; } }
+    while (q < 1) { q += 2; m--; if (m < 0) { m = 11; y--; } }
+    return { y: y, m: m, q: q };
+  }
+  function periodName(p) { return (p.q === 1 ? "1ª" : "2ª") + " quinzena de " + MESES[p.m]; }
+  function periodRangeLabel(p) {
+    var days = periodDays(p);
+    var a = parseIso(days[0]), b = parseIso(days[days.length - 1]);
+    return pad(a.getDate()) + "/" + pad(a.getMonth() + 1) + " – " +
+           pad(b.getDate()) + "/" + pad(b.getMonth() + 1) + "/" + p.y;
+  }
+
+  /* ---------------- números ---------------- */
+
+  function nL(v, dec) {
+    if (v === null || v === undefined || isNaN(v)) return "—";
+    dec = dec === undefined ? 1 : dec;
+    return v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  }
+  function nBRL(v) {
+    return (v < 0 ? "−" : "") + "R$ " +
+      Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  /* ---------------- preço do litro ---------------- */
+
+  // cada quinzena pode ter seu próprio preço; sem ele, vale o padrão dos Ajustes
+  function precoDe(p) {
+    var v = db.precos[periodKey(p)];
+    return (typeof v === "number" && v > 0) ? v : db.config.preco;
+  }
+  function definirPreco(p, valor) {
+    var k = periodKey(p);
+    if (valor === null) delete db.precos[k];
+    else db.precos[k] = valor;
+    save();
+  }
+
+  /* ---------------- estatísticas ---------------- */
+
+  function stats(p) {
+    var days = periodDays(p);
+    var total = 0, lancados = 0, somaVacas = 0, diasComVacas = 0, litrosComVacas = 0;
+    var melhor = null, pior = null;
+    days.forEach(function (k) {
+      var r = db.registros[k];
+      if (!r || typeof r.litros !== "number") return;
+      total += r.litros;
+      lancados++;
+      if (typeof r.vacas === "number" && r.vacas > 0) {
+        somaVacas += r.vacas; diasComVacas++; litrosComVacas += r.litros;
+      }
+      if (!melhor || r.litros > melhor.litros) melhor = { dia: k, litros: r.litros };
+      if (!pior || r.litros < pior.litros) pior = { dia: k, litros: r.litros };
+    });
+    var ini = days[0], fim = days[days.length - 1];
+    var gastos = db.gastos.filter(function (g) { return g.data >= ini && g.data <= fim; });
+    var gastoTotal = 0, gastoKg = 0;
+    gastos.forEach(function (g) {
+      gastoTotal += g.valor || 0;
+      gastoKg += g.kg || 0;
+    });
+    var preco = precoDe(p);
+    var receita = preco ? total * preco : null;
+
+    return {
+      periodo: p,
+      dias: days.length,
+      lancados: lancados,
+      total: total,
+      mediaDia: lancados ? total / lancados : 0,
+      mediaVaca: somaVacas ? litrosComVacas / somaVacas : null,
+      vacasMedia: diasComVacas ? somaVacas / diasComVacas : null,
+      diasComVacas: diasComVacas,
+      melhor: melhor,
+      pior: pior,
+      receita: receita,
+      preco: preco,
+      precoProprio: typeof db.precos[periodKey(p)] === "number",
+      gastos: gastos,
+      gastoTotal: gastoTotal,
+      gastoKg: gastoKg,
+      custoPorLitro: (gastoTotal && total) ? gastoTotal / total : null,
+      custoPorKg: (gastoTotal && gastoKg) ? gastoTotal / gastoKg : null,
+      sobra: (receita !== null && gastoTotal) ? receita - gastoTotal : null
+    };
+  }
+
+  function diasFaltando(p) {
+    var hoje = hojeIso();
+    return periodDays(p).filter(function (k) { return k <= hoje && !db.registros[k]; });
+  }
+
+  function totalGeral() {
+    var t = 0;
+    for (var k in db.registros) if (db.registros[k]) t++;
+    return t;
+  }
+
+  /* ---------------- render ---------------- */
+
+  function render() {
+    var s = stats(view);
+    var sAnt = stats(shiftPeriod(view, -1));
+
+    document.getElementById("welcomeCard").hidden = totalGeral() > 0;
+    document.getElementById("periodTitle").textContent = periodName(view);
+    document.getElementById("periodRange").textContent = periodRangeLabel(view);
+    document.getElementById("resumoTitle").textContent = periodName(view);
+    document.getElementById("resumoHint").textContent =
+      s.lancados + " de " + s.dias + " dias lançados";
+
+    renderKpis(s, sAnt);
+    renderChart(s);
+    renderTable(s);
+    renderGastos(s);
+    renderReport(s, sAnt);
+    renderHistory();
+    renderMissing();
+    renderQuem();
+    renderProdutores();
+    syncEntry();
+  }
+
+  function renderKpis(s, sAnt) {
+    var faltam = s.dias - s.lancados;
+    var projecao = s.lancados ? s.mediaDia * s.dias : 0;
+    var meta = db.config.meta;
+
+    var cards = [
+      {
+        cls: "is-head",
+        label: "Total da quinzena",
+        value: '<span class="k-value">' + nL(s.total, 0) + "<small>L</small></span>",
+        sub: faltam > 0 && s.lancados
+          ? "projeção de " + nL(projecao, 0) + " L se o ritmo seguir"
+          : (s.lancados ? "quinzena completa" : "nenhum dia lançado ainda")
+      },
+      {
+        label: "Média por dia",
+        value: '<span class="k-value">' + nL(s.mediaDia, 0) + "<small>L</small></span>",
+        sub: !meta ? "defina uma meta em Ajustes"
+             : (s.mediaDia >= meta
+                ? '<span class="delta up">' + nL(s.mediaDia - meta, 0) + " L acima da meta de " + nL(meta, 0) + " L</span>"
+                : '<span class="delta down">' + nL(meta - s.mediaDia, 0) + " L abaixo da meta de " + nL(meta, 0) + " L</span>")
+      },
+      {
+        label: "Litros por vaca/dia",
+        value: '<span class="k-value">' + (s.mediaVaca !== null ? nL(s.mediaVaca, 1) + "<small>L</small>" : "—") + "</span>",
+        sub: s.mediaVaca === null ? "informe o nº de vacas ao lançar"
+             : nL(s.vacasMedia, 0) + " vacas em lactação" +
+               (s.diasComVacas < s.lancados ? " · base de " + s.diasComVacas + " dia" + (s.diasComVacas > 1 ? "s" : "") : "")
+      },
+      {
+        cls: "is-money",
+        label: "Vale, em dinheiro",
+        value: '<span class="k-value">' + (s.receita !== null ? nBRL(s.receita) : "—") + "</span>",
+        sub: '<label class="preco-inline">R$ <input type="number" id="precoInline" step="0.01" min="0" ' +
+             'inputmode="decimal" placeholder="0,00" value="' + (s.preco !== null ? s.preco : "") + '" ' +
+             'aria-label="Preço do litro nesta quinzena" /> por litro' +
+             (s.preco === null ? ' <span style="color:var(--money)">— preencha aqui</span>'
+              : (s.precoProprio ? "" : ' <span title="Valor padrão dos Ajustes">(padrão)</span>')) + "</label>"
+      }
+    ];
+
+    if (s.gastoTotal) {
+      cards.push({
+        label: "Gasto com ração",
+        value: '<span class="k-value" style="color:var(--down)">−' + nBRL(s.gastoTotal) + "</span>",
+        sub: (s.gastoKg ? nL(s.gastoKg, 0) + " kg comprados · " : "") + s.gastos.length + " compra" + (s.gastos.length > 1 ? "s" : "")
+      });
+      if (s.sobra !== null) {
+        cards.push({
+          label: "Sobra do leite",
+          value: '<span class="k-value delta ' + (s.sobra >= 0 ? "up" : "down") + '">' + nBRL(s.sobra) + "</span>",
+          sub: "o que resta do leite depois da ração"
+        });
+      }
+    }
+
+    document.getElementById("kpis").innerHTML = cards.map(function (c) {
+      return '<div class="kpi ' + (c.cls || "") + '">' +
+        '<span class="k-label">' + c.label + "</span>" + c.value +
+        '<span class="k-sub">' + c.sub + "</span></div>";
+    }).join("");
+
+    var strip = [];
+    if (s.melhor) {
+      strip.push("Melhor dia: <b>" + diaCurto(s.melhor.dia) + "</b> com <b>" + nL(s.melhor.litros, 0) + " L</b>");
+      strip.push("Menor dia: <b>" + diaCurto(s.pior.dia) + "</b> com <b>" + nL(s.pior.litros, 0) + " L</b>");
+    }
+    if (s.custoPorLitro !== null) {
+      strip.push("A ração custa <b>" + nBRL(s.custoPorLitro) + "</b> por litro produzido" +
+        (s.preco ? " — o litro é vendido a <b>" + nBRL(s.preco) + "</b>" : ""));
+    }
+    if (s.custoPorKg !== null) strip.push("Ração paga: <b>" + nBRL(s.custoPorKg) + "</b> por kg");
+    var pi = document.getElementById("precoInline");
+    if (pi) {
+      pi.readOnly = leitura;
+      pi.addEventListener("change", function () {
+        if (leitura) return;
+        var v = parseFloat(String(pi.value).replace(",", "."));
+        var valido = !isNaN(v) && v > 0;
+        definirPreco(view, valido ? v : null);
+        // primeiro preço informado também vira o padrão das próximas quinzenas
+        if (valido && db.config.preco === null) { db.config.preco = v; save(); }
+        hydrate();
+        render();
+      });
+      pi.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); pi.blur(); } });
+    }
+
+    var stripEl = document.getElementById("strip");
+    stripEl.innerHTML = strip.map(function (t) { return "<span>" + t + "</span>"; }).join("");
+    stripEl.hidden = !strip.length;
+  }
+
+  function renderChart(s) {
+    var days = periodDays(view);
+    var max = 0;
+    days.forEach(function (k) { var r = db.registros[k]; if (r && r.litros > max) max = r.litros; });
+    var teto = max > 0 ? max * 1.12 : 1;
+    var hoje = hojeIso();
+    var sel = document.getElementById("fData").value;
+
+    var chart = document.getElementById("chart");
+    chart.innerHTML = days.map(function (k) {
+      var r = db.registros[k];
+      var tem = r && typeof r.litros === "number";
+      var h = tem ? Math.max((r.litros / teto) * 100, 1.5) : 0;
+      var destaque = tem && (s.melhor && k === s.melhor.dia);
+      var title = diaCurto(k) + " (" + SEMANA[parseIso(k).getDay()] + ") — " +
+        (tem ? nL(r.litros, 1) + " L. Clique para corrigir." : "sem lançamento. Clique para lançar.");
+      return '<button type="button" class="day-cell" data-day="' + k + '" title="' + title + '" aria-label="' + title + '">' +
+        '<span class="val' + (destaque ? " show" : "") + '">' + (tem ? nL(r.litros, 0) : "") + "</span>" +
+        '<span class="bar' + (tem ? (k === hoje ? " today" : "") : " empty") + '" style="height:' + h + '%"></span>' +
+      "</button>";
+    }).join("");
+
+    if (s.lancados) {
+      var linha = document.createElement("div");
+      linha.className = "avg-line";
+      linha.style.bottom = ((s.mediaDia / teto) * 100) + "%";
+      linha.innerHTML = '<span class="line-tag">média ' + nL(s.mediaDia, 0) + " L</span>";
+      chart.appendChild(linha);
+    }
+    if (db.config.meta && db.config.meta < teto) {
+      var lm = document.createElement("div");
+      lm.className = "meta-line";
+      lm.style.bottom = ((db.config.meta / teto) * 100) + "%";
+      lm.innerHTML = '<span class="line-tag">meta ' + nL(db.config.meta, 0) + " L</span>";
+      chart.appendChild(lm);
+    }
+
+    document.getElementById("axis").innerHTML = days.map(function (k) {
+      return '<span class="' + (k === sel ? "on" : "") + '">' + parseIso(k).getDate() + "</span>";
+    }).join("");
+
+    Array.prototype.forEach.call(chart.querySelectorAll(".day-cell"), function (el) {
+      el.addEventListener("click", function () { loadDay(el.getAttribute("data-day")); });
+    });
+  }
+
+  function renderMissing() {
+    var faltas = diasFaltando(view);
+    var el = document.getElementById("missing");
+    if (!faltas.length) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    var lista = faltas.slice(-8);
+    el.innerHTML = "<span>" + (faltas.length === 1 ? "Falta lançar 1 dia:" : "Faltam lançar " + faltas.length + " dias:") + "</span>" +
+      lista.map(function (k) { return '<button type="button" class="chip" data-fill="' + k + '">' + diaCurto(k) + "</button>"; }).join("") +
+      (faltas.length > lista.length ? '<span style="color:var(--muted)">e outros ' + (faltas.length - lista.length) + "</span>" : "");
+    Array.prototype.forEach.call(el.querySelectorAll("[data-fill]"), function (b) {
+      b.addEventListener("click", function () { loadDay(b.getAttribute("data-fill")); });
+    });
+  }
+
+  function renderTable(s) {
+    var linhas = periodDays(view).filter(function (k) { return db.registros[k]; });
+    var sel = document.getElementById("fData").value;
+
+    document.getElementById("tableHint").textContent =
+      linhas.length ? linhas.length + (linhas.length > 1 ? " dias lançados" : " dia lançado") : "";
+
+    if (!linhas.length) {
+      document.getElementById("tableWrap").innerHTML =
+        '<div class="empty-state">Nenhum dia lançado nesta quinzena.<br />Use o formulário lá em cima ou clique numa barra do gráfico.</div>';
+      return;
+    }
+
+    var acum = 0;
+    var corpo = linhas.map(function (k) {
+      var r = db.registros[k], d = parseIso(k);
+      var fds = d.getDay() === 0 || d.getDay() === 6;
+      acum += r.litros;
+      return '<tr class="' + (fds ? "weekend " : "") + (k === sel ? "sel" : "") + '" data-row="' + k + '">' +
+        "<td>" + pad(d.getDate()) + "/" + pad(d.getMonth() + 1) +
+          ' <span style="color:var(--muted)">' + SEMANA[d.getDay()] + "</span></td>" +
+        "<td>" + nL(r.litros, 1) + "</td>" +
+        "<td>" + (r.vacas || "—") + "</td>" +
+        "<td>" + ((r.vacas && r.vacas > 0) ? nL(r.litros / r.vacas, 1) : "—") + "</td>" +
+        "<td>" + nL(acum, 0) + "</td>" +
+        "<td>" + (s.preco ? nBRL(r.litros * s.preco) : "—") + "</td>" +
+        '<td class="obs">' + escapeHtml(r.obs || "") + "</td>" +
+        '<td class="acts"><button class="btn-ghost" data-del="' + k + '" title="Excluir este dia">excluir</button></td>' +
+      "</tr>";
+    }).join("");
+
+    document.getElementById("tableWrap").innerHTML =
+      "<table><thead><tr><th>Dia</th><th>Litros</th><th>Vacas</th><th>L/vaca</th>" +
+      "<th>Acumulado</th><th>Valor</th><th>Observação</th><th></th></tr></thead><tbody>" +
+      corpo + "</tbody></table>";
+
+    var wrap = document.getElementById("tableWrap");
+    Array.prototype.forEach.call(wrap.querySelectorAll("[data-row]"), function (tr) {
+      tr.addEventListener("click", function (ev) {
+        if (ev.target.hasAttribute("data-del")) return;
+        loadDay(tr.getAttribute("data-row"));
+      });
+    });
+    Array.prototype.forEach.call(wrap.querySelectorAll("[data-del]"), function (b) {
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var k = b.getAttribute("data-del");
+        var r = db.registros[k];
+        perguntar("Excluir o dia " + diaCurto(k) + "?",
+          "Os " + nL(r.litros, 1) + " L lançados nesse dia serão removidos.",
+          "Excluir", true, function () {
+            delete db.registros[k];
+            save(); render();
+            msg("Lançamento de " + diaCurto(k) + " excluído.", true);
+          });
+      });
+    });
+  }
+
+  function renderGastos(s) {
+    var wrap = document.getElementById("gastosWrap");
+    if (!s.gastos.length) {
+      wrap.innerHTML = '<div class="empty-state">Nenhuma compra de ração lançada nesta quinzena.<br />' +
+        "Lançando aqui, você passa a ver quanto sobra do leite depois da alimentação.</div>";
+      return;
+    }
+    var lista = s.gastos.slice().sort(function (a, b) { return a.data < b.data ? -1 : 1; });
+    var corpo = lista.map(function (g) {
+      return '<tr data-gasto="' + g.id + '">' +
+        "<td>" + diaCurto(g.data) + "</td>" +
+        '<td class="obs">' + escapeHtml(g.desc || "ração") + "</td>" +
+        "<td>" + (g.kg ? nL(g.kg, 0) + " kg" : "—") + "</td>" +
+        "<td>" + (g.kg ? nBRL(g.valor / g.kg) : "—") + "</td>" +
+        "<td>" + nBRL(g.valor) + "</td>" +
+        '<td class="acts"><button class="btn-ghost" data-delg="' + g.id + '">excluir</button></td>' +
+      "</tr>";
+    }).join("");
+
+    wrap.innerHTML = "<table><thead><tr><th>Data</th><th>Item</th><th>Qtd.</th>" +
+      "<th>R$/kg</th><th>Valor</th><th></th></tr></thead><tbody>" + corpo +
+      '<tr style="font-weight:600"><td>Total</td><td class="obs"></td>' +
+      "<td>" + (s.gastoKg ? nL(s.gastoKg, 0) + " kg" : "—") + "</td>" +
+      "<td>" + (s.custoPorKg !== null ? nBRL(s.custoPorKg) : "—") + "</td>" +
+      '<td style="color:var(--down)">' + nBRL(s.gastoTotal) + "</td><td></td></tr>" +
+      "</tbody></table>";
+
+    Array.prototype.forEach.call(wrap.querySelectorAll("[data-delg]"), function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-delg");
+        var g = db.gastos.filter(function (x) { return String(x.id) === id; })[0];
+        if (!g) return;
+        perguntar("Excluir esta compra?",
+          nBRL(g.valor) + " em " + diaCurto(g.data) + (g.desc ? " — " + g.desc : "") + ".",
+          "Excluir", true, function () {
+            db.gastos = db.gastos.filter(function (x) { return String(x.id) !== id; });
+            save(); render();
+            gastoMsg("Compra excluída.", true);
+          });
+      });
+    });
+  }
+
+  function gastoMsg(t, warn) {
+    var el = document.getElementById("gastoMsg");
+    el.textContent = t;
+    el.className = "form-msg" + (warn ? " warn" : "");
+    if (t) setTimeout(function () { if (el.textContent === t) el.textContent = ""; }, 5000);
+  }
+
+  document.getElementById("gastoForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var data = document.getElementById("gData").value;
+    var valor = parseFloat(String(document.getElementById("gValor").value).replace(",", "."));
+    var kg = parseFloat(String(document.getElementById("gKg").value).replace(",", "."));
+    if (!data) { gastoMsg("Escolha a data da compra.", true); return; }
+    if (isNaN(valor) || valor <= 0) { gastoMsg("Informe quanto foi pago.", true); return; }
+
+    db.gastos.push({
+      id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+      data: data,
+      valor: valor,
+      kg: (!isNaN(kg) && kg > 0) ? kg : null,
+      desc: document.getElementById("gDesc").value.trim()
+    });
+    save();
+
+    view = periodOf(parseIso(data));
+    document.getElementById("gValor").value = "";
+    document.getElementById("gKg").value = "";
+    document.getElementById("gDesc").value = "";
+    render();
+    gastoMsg(nBRL(valor) + " lançados em " + diaCurto(data) + ".");
+  });
+
+  // agrupa as compras de ração pelo que foi comprado
+  function porTipo(s) {
+    var mapa = {}, ordem = [];
+    s.gastos.forEach(function (g) {
+      var nome = (g.desc || "").trim() || "Ração (sem descrição)";
+      if (!mapa[nome]) { mapa[nome] = { desc: nome, kg: 0, valor: 0, compras: 0 }; ordem.push(nome); }
+      mapa[nome].valor += g.valor || 0;
+      mapa[nome].kg += g.kg || 0;
+      mapa[nome].compras++;
+    });
+    return ordem.map(function (n) { return mapa[n]; })
+                .sort(function (a, b) { return b.valor - a.valor; });
+  }
+
+  function renderReport(s, sAnt) {
+    var el = document.getElementById("report");
+    if (!s.lancados) { el.textContent = "Sem lançamentos nesta quinzena — nada a informar ainda."; return; }
+    var L = [];
+    L.push(db.config.fazenda.toUpperCase());
+    L.push(periodName(view).toUpperCase() + " (" + periodRangeLabel(view) + ")");
+    L.push("");
+    L.push("Produção total ..... " + nL(s.total, 1) + " L");
+    L.push("Média por dia ...... " + nL(s.mediaDia, 1) + " L");
+    L.push("Dias lançados ...... " + s.lancados + " de " + s.dias);
+    if (s.mediaVaca !== null) {
+      L.push("Litros/vaca/dia .... " + nL(s.mediaVaca, 1) + " L (" + nL(s.vacasMedia, 0) + " vacas" +
+        (s.diasComVacas < s.lancados ? ", base de " + s.diasComVacas + " dias" : "") + ")");
+    }
+    L.push("Melhor dia ......... " + diaCurto(s.melhor.dia) + " com " + nL(s.melhor.litros, 1) + " L");
+    L.push("Menor dia .......... " + diaCurto(s.pior.dia) + " com " + nL(s.pior.litros, 1) + " L");
+
+    if (s.gastos.length) {
+      L.push("");
+      L.push("RAÇÃO COMPRADA");
+      porTipo(s).forEach(function (t) {
+        L.push("· " + t.desc + " — " + (t.kg ? nL(t.kg, 0) + " kg, " : "") + nBRL(t.valor) +
+          (t.kg ? " (" + nBRL(t.valor / t.kg) + "/kg)" : "") +
+          (t.compras > 1 ? " em " + t.compras + " compras" : ""));
+      });
+      L.push("Total da ração ..... " + nBRL(s.gastoTotal) + (s.gastoKg ? " · " + nL(s.gastoKg, 0) + " kg" : ""));
+    }
+
+    if (s.receita !== null || s.gastoTotal) {
+      L.push("");
+      L.push("RESULTADO");
+      if (s.receita !== null) L.push("Valor do leite ..... " + nBRL(s.receita) + " (a " + nBRL(s.preco) + "/L)");
+      if (s.gastoTotal) L.push("(−) Ração .......... " + nBRL(s.gastoTotal));
+      if (s.sobra !== null) L.push("(=) Sobra .......... " + nBRL(s.sobra));
+      if (s.custoPorLitro !== null) L.push("Ração por litro .... " + nBRL(s.custoPorLitro) +
+        (s.preco ? " (litro vendido a " + nBRL(s.preco) + ")" : ""));
+    }
+
+    var faltas = diasFaltando(view);
+    if (faltas.length) {
+      L.push("");
+      L.push("Atenção: " + faltas.length + " dia(s) ainda sem lançamento.");
+    }
+    el.textContent = L.join("\n");
+  }
+
+  function renderHistory() {
+    var p = view, lista = [];
+    for (var i = 0; i < 12; i++) { lista.push(stats(p)); p = shiftPeriod(p, -1); }
+    lista = lista.filter(function (s, i) { return s.total > 0 || i === 0; });
+    var max = lista.reduce(function (a, s) { return Math.max(a, s.total); }, 0) || 1;
+    var atual = periodKey(view);
+
+    document.getElementById("history").innerHTML = lista.map(function (s, i) {
+      var ant = lista[i + 1], d = '<span class="delta flat">—</span>';
+      if (ant && ant.total) {
+        var diff = s.total - ant.total, pct = (diff / ant.total) * 100;
+        var cls = Math.abs(pct) < 0.05 ? "flat" : (diff > 0 ? "up" : "down");
+        d = '<span class="delta ' + cls + '">' + (diff > 0 ? "+" : diff < 0 ? "−" : "") +
+            nL(Math.abs(pct), 1) + "% <span style='color:var(--muted)'>(" +
+            (diff > 0 ? "+" : diff < 0 ? "−" : "") + nL(Math.abs(diff), 0) + " L)</span></span>";
+      }
+      return '<div class="hist-row ' + (periodKey(s.periodo) === atual ? "current" : "") + '" ' +
+        'data-go="' + periodKey(s.periodo) + '" role="button" tabindex="0">' +
+        '<div class="hist-name">' + (s.periodo.q === 1 ? "1ª quinzena" : "2ª quinzena") +
+          "<span>" + MESES[s.periodo.m].slice(0, 3) + "/" + s.periodo.y + "</span></div>" +
+        '<div class="hist-track"><div class="hist-fill" style="width:' + (s.total / max * 100) + '%"></div></div>' +
+        '<div class="hist-total">' + nL(s.total, 0) + " L</div>" +
+        '<div class="hist-delta">' + d + "</div></div>";
+    }).join("");
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-go]"), function (el) {
+      function ir() {
+        var pk = el.getAttribute("data-go").split("-");
+        view = { y: +pk[0], m: +pk[1] - 1, q: +pk[2].slice(1) };
+        render();
+        document.getElementById("resumoTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      el.addEventListener("click", ir);
+      el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ir(); } });
+    });
+  }
+
+  /* ---------------- formulário ---------------- */
+
+  function msg(t, warn) {
+    var el = document.getElementById("formMsg");
+    el.textContent = t;
+    el.className = "form-msg" + (warn ? " warn" : "");
+    if (t) setTimeout(function () { if (el.textContent === t) el.textContent = ""; }, 5000);
+  }
+
+  function syncEntry() {
+    var k = document.getElementById("fData").value;
+    var r = k ? db.registros[k] : null;
+    var btn = document.getElementById("saveBtn");
+    var titulo = document.getElementById("entryTitle");
+    var hoje = hojeIso();
+
+    document.getElementById("chipHoje").classList.toggle("on", k === hoje);
+    var ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+    document.getElementById("chipOntem").classList.toggle("on", k === iso(ontem));
+
+    if (r) {
+      btn.textContent = "Atualizar";
+      titulo.textContent = "Corrigir o dia " + diaCurto(k);
+      document.getElementById("formMsg").textContent = "Este dia já tem " + nL(r.litros, 1) + " L lançados. Salvar substitui o valor.";
+      document.getElementById("formMsg").className = "form-msg warn";
+    } else {
+      btn.textContent = "Salvar";
+      titulo.textContent = k === hoje ? "Lançar produção de hoje" : "Lançar produção de " + (k ? diaCurto(k) : "um dia");
+    }
+
+    var vh = document.getElementById("vacasHint");
+    vh.textContent = db.config.ultimasVacas ? "· último: " + db.config.ultimasVacas : "· opcional";
+  }
+
+  function loadDay(k) {
+    var r = db.registros[k] || {};
+    document.getElementById("fData").value = k;
+    document.getElementById("fLitros").value = r.litros !== undefined ? r.litros : "";
+    document.getElementById("fVacas").value =
+      r.vacas !== undefined ? r.vacas : (db.config.ultimasVacas || "");
+    document.getElementById("fObs").value = r.obs || "";
+    render();
+    document.getElementById("fLitros").focus();
+    document.getElementById("fLitros").select();
+    document.getElementById("entryForm").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  document.getElementById("entryForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var k = document.getElementById("fData").value;
+    var litros = parseFloat(String(document.getElementById("fLitros").value).replace(",", "."));
+    if (!k) { msg("Escolha a data.", true); return; }
+    if (isNaN(litros) || litros < 0) { msg("Informe quantos litros saíram nesse dia.", true); document.getElementById("fLitros").focus(); return; }
+
+    var vacas = parseInt(document.getElementById("fVacas").value, 10);
+    var novo = { litros: litros, obs: document.getElementById("fObs").value.trim() };
+    var atualizou = !!db.registros[k];
+    if (!isNaN(vacas) && vacas > 0) { novo.vacas = vacas; db.config.ultimasVacas = vacas; }
+    db.registros[k] = novo;
+    save();
+
+    view = periodOf(parseIso(k));
+
+    var prox = parseIso(k); prox.setDate(prox.getDate() + 1);
+    var hoje = hojeIso();
+    document.getElementById("fData").value = iso(prox) <= hoje ? iso(prox) : hoje;
+    document.getElementById("fLitros").value = "";
+    document.getElementById("fObs").value = "";
+    document.getElementById("fVacas").value = db.config.ultimasVacas || "";
+
+    render();
+    msg((atualizou ? "Dia " + diaCurto(k) + " atualizado para " : "") +
+        (atualizou ? nL(litros, 1) + " L." : nL(litros, 1) + " L lançados em " + diaCurto(k) + "."));
+    document.getElementById("fLitros").focus();
+  });
+
+  document.getElementById("fData").addEventListener("change", function () { render(); });
+
+  document.getElementById("chipHoje").addEventListener("click", function () { loadDay(hojeIso()); });
+  document.getElementById("chipOntem").addEventListener("click", function () {
+    var d = new Date(); d.setDate(d.getDate() - 1); loadDay(iso(d));
+  });
+
+  /* ---------------- navegação ---------------- */
+
+  document.getElementById("prevPeriod").addEventListener("click", function () { view = shiftPeriod(view, -1); render(); });
+  document.getElementById("nextPeriod").addEventListener("click", function () { view = shiftPeriod(view, 1); render(); });
+  document.getElementById("todayBtn").addEventListener("click", function () { view = periodOf(new Date()); render(); });
+
+  /* ---------------- ajustes ---------------- */
+
+  var farm = document.getElementById("farmName");
+  farm.addEventListener("input", function () {
+    if (leitura) return;
+    db.config.fazenda = farm.value.trim() || "Produção de Leite";
+    save();
+    renderReport(stats(view), stats(shiftPeriod(view, -1)));
+  });
+
+  document.getElementById("fPreco").addEventListener("input", function () {
+    if (leitura) return;
+    var v = parseFloat(String(this.value).replace(",", "."));
+    db.config.preco = isNaN(v) || v <= 0 ? null : v;
+    save(); render();
+  });
+  document.getElementById("fMeta").addEventListener("input", function () {
+    if (leitura) return;
+    var v = parseFloat(String(this.value).replace(",", "."));
+    db.config.meta = isNaN(v) || v <= 0 ? null : v;
+    save(); render();
+  });
+
+  /* ---------------- relatório ---------------- */
+
+  document.getElementById("copyReport").addEventListener("click", function () {
+    var txt = document.getElementById("report").textContent, btn = this;
+    function ok() { btn.textContent = "Copiado"; setTimeout(function () { btn.textContent = "Copiar relatório"; }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); ok(); } catch (e) { btn.textContent = "Não deu — copie na mão"; }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, fallback);
+    else fallback();
+  });
+  /* ---------------- PDF ----------------
+     Montado byte a byte: nada de biblioteca externa nem caixa de
+     impressão do navegador, que pode estar bloqueada.               */
+
+  function pdfTexto(s) {
+    var trocas = { "−": "-", "–": "-", "—": "-", "…": "...", "“": '"', "”": '"', "‘": "'", "’": "'", "·": "-" };
+    var out = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i);
+      if (trocas[c]) { out += trocas[c]; continue; }
+      out += s.charCodeAt(i) < 256 ? c : "?";
+    }
+    return out.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  }
+
+  function gerarPDF() {
+    var s = stats(view);
+    var W = 595.28, H = 841.89, ME = 56, LARG = W - ME * 2;
+    var paginas = [], ops = [], y = 0;
+
+    function novaPagina() {
+      if (ops.length) paginas.push(ops);
+      ops = [];
+      y = H - ME;
+    }
+    function espaco(n) { if (y - n < ME + 26) novaPagina(); y -= n; }
+    function txt(x, size, bold, cinza, str) {
+      if (cinza) ops.push("0.42 0.46 0.44 rg");
+      ops.push("BT /" + (bold ? "F2" : "F1") + " " + size + " Tf 1 0 0 1 " +
+               x.toFixed(1) + " " + y.toFixed(1) + " Tm (" + pdfTexto(str) + ") Tj ET");
+      if (cinza) ops.push("0 0 0 rg");
+    }
+    function regua(grossa) {
+      ops.push((grossa ? "0.12 0.42 0.36" : "0.80 0.84 0.80") + " RG " + (grossa ? 1.2 : 0.6) + " w " +
+               ME + " " + y.toFixed(1) + " m " + (W - ME) + " " + y.toFixed(1) + " l S");
+    }
+    function titulo(t) {
+      espaco(26); txt(ME, 11, true, false, t.toUpperCase());
+      espaco(6); regua(true);
+    }
+    function item(rotulo, valor, negrito) {
+      espaco(16);
+      txt(ME, 10.5, negrito, false, rotulo);
+      txt(ME + 200, 10.5, negrito, false, valor);
+    }
+    function linhaTabela(cols, xs, negrito, cinza) {
+      espaco(15);
+      for (var i = 0; i < cols.length; i++) txt(ME + xs[i], 9.5, negrito, cinza, cols[i]);
+    }
+
+    novaPagina();
+
+    // cabeçalho
+    txt(ME, 19, true, false, db.config.fazenda);
+    espaco(19); txt(ME, 11.5, false, true, periodName(view) + "  ·  " + periodRangeLabel(view));
+    espaco(12); regua(true);
+
+    titulo("Produção");
+    item("Produção total", nL(s.total, 1) + " L", true);
+    item("Média por dia", nL(s.mediaDia, 1) + " L");
+    item("Dias lançados", s.lancados + " de " + s.dias);
+    if (s.mediaVaca !== null) {
+      item("Litros por vaca/dia", nL(s.mediaVaca, 1) + " L  (" + nL(s.vacasMedia, 0) + " vacas)");
+    }
+    if (s.melhor) {
+      item("Melhor dia", diaCurto(s.melhor.dia) + " com " + nL(s.melhor.litros, 1) + " L");
+      item("Menor dia", diaCurto(s.pior.dia) + " com " + nL(s.pior.litros, 1) + " L");
+    }
+
+    if (s.gastos.length) {
+      var xs = [0, 34, 250, 330, 420];
+      titulo("Ração comprada");
+      linhaTabela(["Data", "Tipo de ração", "Quantidade", "R$/kg", "Valor"], xs, true, true);
+      espaco(4); regua(false);
+      s.gastos.slice().sort(function (a, b) { return a.data < b.data ? -1 : 1; }).forEach(function (g) {
+        linhaTabela([
+          diaCurto(g.data),
+          (g.desc || "").trim() || "sem descrição",
+          g.kg ? nL(g.kg, 0) + " kg" : "-",
+          g.kg ? nBRL(g.valor / g.kg) : "-",
+          nBRL(g.valor)
+        ], xs, false, false);
+      });
+      espaco(5); regua(false);
+      linhaTabela(["", "Total", s.gastoKg ? nL(s.gastoKg, 0) + " kg" : "-",
+                   s.custoPorKg !== null ? nBRL(s.custoPorKg) : "-", nBRL(s.gastoTotal)], xs, true, false);
+
+      var tipos = porTipo(s);
+      if (tipos.length > 1) {
+        espaco(20); txt(ME, 9.5, true, true, "POR TIPO");
+        tipos.forEach(function (t) {
+          linhaTabela(["", t.desc, t.kg ? nL(t.kg, 0) + " kg" : "-",
+                       t.kg ? nBRL(t.valor / t.kg) : "-", nBRL(t.valor)], xs, false, false);
+        });
+      }
+    }
+
+    if (s.receita !== null || s.gastoTotal) {
+      titulo("Resultado");
+      if (s.receita !== null) item("Valor do leite", nBRL(s.receita) + "  (a " + nBRL(s.preco) + "/L)");
+      if (s.gastoTotal) item("(-) Ração", nBRL(s.gastoTotal));
+      if (s.sobra !== null) item("(=) Sobra", nBRL(s.sobra), true);
+      if (s.custoPorLitro !== null) item("Ração por litro produzido", nBRL(s.custoPorLitro));
+    }
+
+    if (s.lancados) {
+      var xd = [0, 60, 150, 240, 330];
+      titulo("Dia a dia");
+      linhaTabela(["Dia", "Litros", "Vacas", "L/vaca", "Observação"], xd, true, true);
+      espaco(4); regua(false);
+      periodDays(view).forEach(function (k) {
+        var r = db.registros[k];
+        if (!r) return;
+        var d = parseIso(k);
+        linhaTabela([
+          pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + " " + SEMANA[d.getDay()],
+          nL(r.litros, 1),
+          r.vacas ? String(r.vacas) : "-",
+          (r.vacas && r.vacas > 0) ? nL(r.litros / r.vacas, 1) : "-",
+          (r.obs || "").slice(0, 34)
+        ], xd, false, false);
+      });
+      espaco(5); regua(false);
+      linhaTabela(["Total", nL(s.total, 1), "", "", ""], xd, true, false);
+    }
+
+    var faltas = diasFaltando(view);
+    if (faltas.length) {
+      espaco(24);
+      txt(ME, 9.5, false, true, "Atenção: " + faltas.length + " dia(s) desta quinzena ainda sem lançamento.");
+    }
+
+    espaco(26);
+    var ag = new Date();
+    txt(ME, 8.5, false, true, "Emitido em " + pad(ag.getDate()) + "/" + pad(ag.getMonth() + 1) + "/" +
+        ag.getFullYear() + " as " + pad(ag.getHours()) + ":" + pad(ag.getMinutes()));
+    novaPagina();
+
+    // montagem do arquivo
+    var objs = ["",
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"
+    ];
+    var kids = [];
+    paginas.forEach(function (pOps, i) {
+      var pageObj = 5 + i * 2, contObj = 6 + i * 2;
+      kids.push(pageObj + " 0 R");
+      objs[pageObj] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + W + " " + H + "] " +
+        "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + contObj + " 0 R >>";
+      var fluxo = pOps.join("\n");
+      objs[contObj] = "<< /Length " + fluxo.length + " >>\nstream\n" + fluxo + "\nendstream";
+    });
+    objs[2] = "<< /Type /Pages /Kids [" + kids.join(" ") + "] /Count " + paginas.length + " >>";
+
+    var arquivo = "%PDF-1.4\n", posicoes = [];
+    for (var i = 1; i < objs.length; i++) {
+      posicoes[i] = arquivo.length;
+      arquivo += i + " 0 obj\n" + objs[i] + "\nendobj\n";
+    }
+    var inicioXref = arquivo.length;
+    arquivo += "xref\n0 " + objs.length + "\n0000000000 65535 f \n";
+    for (i = 1; i < objs.length; i++) {
+      arquivo += ("0000000000" + posicoes[i]).slice(-10) + " 00000 n \n";
+    }
+    arquivo += "trailer\n<< /Size " + objs.length + " /Root 1 0 R >>\nstartxref\n" + inicioXref + "\n%%EOF";
+
+    var bytes = new Uint8Array(arquivo.length);
+    for (i = 0; i < arquivo.length; i++) bytes[i] = arquivo.charCodeAt(i) & 0xff;
+
+    entregar("relatorio-leite-" + periodKey(view) + ".pdf",
+      new Blob([bytes], { type: "application/pdf" }),
+      {
+        texto: document.getElementById("report").textContent,
+        rotulo: "Copiar em texto",
+        extra: { rotulo: "Salvar em imagem", acao: function () { janelaImagem(desenharRelatorio()); } }
+      });
+  }
+
+  /* ---------------- relatório em imagem ----------------
+     O aplicativo não deixa a página salvar arquivos, mas imagem o
+     celular sempre guarda: é só segurar o dedo em cima dela. Vale
+     tanto no Android quanto no iPhone.                             */
+
+  function desenharRelatorio() {
+    var linhas = document.getElementById("report").textContent.split("\n");
+    var MONO = 'ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace';
+    var SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    var ESC = 2, PAD = 32, ALT = 25, CORPO = 15;
+
+    var cv = document.createElement("canvas");
+    var ctx = cv.getContext("2d");
+
+    // primeiro mede, depois desenha
+    ctx.font = CORPO + "px " + MONO;
+    var larg = 0;
+    linhas.forEach(function (l) { larg = Math.max(larg, ctx.measureText(l).width); });
+    ctx.font = "700 21px " + SANS;
+    larg = Math.max(larg, ctx.measureText(linhas[0] || "").width);
+    larg = Math.max(Math.ceil(larg) + PAD * 2, 470);
+
+    var corpo = linhas.slice(2);
+    while (corpo.length && !corpo[0].trim()) corpo.shift();
+    var titulos = corpo.filter(function (l) { return ehTitulo(l); }).length;
+    var altura = PAD * 2 + 34 + 22 + 16 + corpo.length * ALT + titulos * 8 + 30;
+
+    cv.width = Math.round(larg * ESC);
+    cv.height = Math.round(altura * ESC);
+    ctx = cv.getContext("2d");
+    ctx.scale(ESC, ESC);
+    ctx.textBaseline = "alphabetic";
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, larg, altura);
+
+    var y = PAD + 20;
+    ctx.fillStyle = "#141b17";
+    ctx.font = "700 21px " + SANS;
+    ctx.fillText(linhas[0] || "", PAD, y);
+
+    y += 22;
+    ctx.fillStyle = "#6d7a71";
+    ctx.font = "13px " + SANS;
+    ctx.fillText(linhas[1] || "", PAD, y);
+
+    y += 16;
+    ctx.strokeStyle = "#1f6b5b";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(larg - PAD, y); ctx.stroke();
+
+    y += 12;
+    corpo.forEach(function (l) {
+      y += ALT;
+      if (!l.trim()) return;
+      if (ehTitulo(l)) {
+        y += 8;
+        ctx.fillStyle = "#1f6b5b";
+        ctx.font = "700 13px " + SANS;
+        ctx.fillText(l, PAD, y);
+      } else {
+        ctx.fillStyle = "#141b17";
+        ctx.font = CORPO + "px " + MONO;
+        ctx.fillText(l, PAD, y);
+      }
+    });
+
+    var ag = new Date();
+    ctx.fillStyle = "#6d7a71";
+    ctx.font = "11px " + SANS;
+    ctx.fillText("Emitido em " + pad(ag.getDate()) + "/" + pad(ag.getMonth() + 1) + "/" + ag.getFullYear() +
+      " às " + pad(ag.getHours()) + ":" + pad(ag.getMinutes()), PAD, altura - PAD + 8);
+
+    return cv;
+  }
+
+  // linhas de seção do relatório vêm todas em maiúsculas
+  function ehTitulo(l) {
+    var t = l.trim();
+    return t.length > 2 && t === t.toUpperCase() && t !== t.toLowerCase() && t.indexOf(".") < 0;
+  }
+
+  function janelaImagem(cv) {
+    var dataUrl = cv.toDataURL("image/png");
+    var nome = "relatorio-leite-" + periodKey(view) + ".png";
+
+    var over = document.createElement("div");
+    over.className = "overlay";
+    over.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">' +
+        "<h3>Relatório em imagem</h3>" +
+        "<p><strong>No celular:</strong> segure o dedo na imagem e escolha salvar ou compartilhar. " +
+        "<strong>No computador:</strong> clique com o botão direito e salve.</p>" +
+        '<img class="folha" alt="Relatório da quinzena" src="' + dataUrl + '" />' +
+        '<div class="acoes">' +
+          '<button type="button" data-no>Fechar</button>' +
+          '<button type="button" data-save class="btn-primary">Salvar imagem</button>' +
+        "</div></div>";
+    document.body.appendChild(over);
+
+    function fechar() {
+      document.removeEventListener("keydown", tecla);
+      if (over.parentNode) over.parentNode.removeChild(over);
+    }
+    function tecla(e) { if (e.key === "Escape") fechar(); }
+    over.querySelector("[data-no]").addEventListener("click", fechar);
+    over.addEventListener("click", function (e) { if (e.target === over) fechar(); });
+    document.addEventListener("keydown", tecla);
+
+    var bs = over.querySelector("[data-save]");
+    bs.addEventListener("click", function () {
+      // png é um formato que o próprio Claude sabe salvar; se não der,
+      // a pessoa ainda tem a imagem na tela para segurar o dedo.
+      var cap = window.claude && window.claude.downloads;
+      if (cap && cap.save) {
+        cv.toBlob(function (blob) {
+          cap.save({ filename: nome, data: blob }).then(function () {
+            bs.textContent = "Imagem salva";
+          }, function () {
+            bs.textContent = "Segure o dedo na imagem";
+          });
+        }, "image/png");
+        return;
+      }
+      var a = document.createElement("a");
+      a.href = dataUrl; a.download = nome;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      bs.textContent = "Segure o dedo na imagem";
+    });
+  }
+
+  document.getElementById("imgReport").addEventListener("click", function () {
+    var s = stats(view);
+    if (!s.lancados) {
+      avisar("Nada para gerar", "Esta quinzena ainda não tem lançamentos.");
+      return;
+    }
+    janelaImagem(desenharRelatorio());
+  });
+
+  document.getElementById("printReport").addEventListener("click", function () {
+    var s = stats(view);
+    if (!s.lancados && !s.gastos.length) {
+      avisar("Nada para gerar", "Esta quinzena ainda não tem lançamentos.");
+      return;
+    }
+    gerarPDF();
+    var b = this;
+    b.textContent = "PDF gerado";
+    setTimeout(function () { b.textContent = "Baixar PDF"; }, 2200);
+  });
+
+  /* ---------------- dados ---------------- */
+
+  function baixar(nome, conteudo, tipo, rotuloCopia) {
+    entregar(nome, new Blob(["﻿" + conteudo], { type: tipo }),
+      { texto: conteudo, rotulo: rotuloCopia || "Copiar o conteúdo" });
+  }
+
+  function textoBackup() { return JSON.stringify(db, null, 2); }
+
+  // aceita o backup vindo de arquivo ou colado como texto
+  function aplicarBackup(texto, aoFalhar) {
+    var novo;
+    try {
+      novo = JSON.parse(texto);
+      if (!novo || typeof novo.registros !== "object" || novo.registros === null) throw new Error("formato");
+    } catch (e) {
+      if (aoFalhar) aoFalhar();
+      else avisar("Backup inválido", "O texto não parece um backup deste sistema. Copie o backup inteiro, do primeiro { até o último }.");
+      return false;
+    }
+    var qtd = Object.keys(novo.registros).length;
+    perguntar("Restaurar " + qtd + " lançamento(s)?",
+      "Tudo o que está gravado neste aparelho agora será substituído pelo conteúdo do backup.",
+      "Restaurar", true, function () {
+        db = {
+          registros: novo.registros,
+          gastos: Array.isArray(novo.gastos) ? novo.gastos : [],
+          precos: novo.precos || {},
+          config: Object.assign(padraoConfig(), novo.config || {})
+        };
+        save(); hydrate(); render();
+        msg("Backup restaurado: " + qtd + " lançamentos.");
+      });
+    return true;
+  }
+
+  document.getElementById("exportCsv").addEventListener("click", function () {
+    var chaves = Object.keys(db.registros).sort();
+    if (!chaves.length) { avisar("Nada para exportar", "Lance ao menos um dia de produção antes."); return; }
+    var linhas = ["data;quinzena;litros;vacas;litros_por_vaca;observacao"];
+    chaves.forEach(function (k) {
+      var r = db.registros[k], p = periodOf(parseIso(k));
+      linhas.push([
+        k, periodKey(p), String(r.litros).replace(".", ","),
+        r.vacas || "",
+        (r.vacas && r.vacas > 0) ? (r.litros / r.vacas).toFixed(2).replace(".", ",") : "",
+        (r.obs || "").replace(/;/g, ",")
+      ].join(";"));
+    });
+    if (db.gastos.length) {
+      linhas.push("");
+      linhas.push("GASTOS COM RACAO");
+      linhas.push("data;item;kg;valor;valor_por_kg");
+      db.gastos.slice().sort(function (a, b) { return a.data < b.data ? -1 : 1; }).forEach(function (g) {
+        linhas.push([
+          g.data, (g.desc || "ração").replace(/;/g, ","),
+          g.kg ? String(g.kg).replace(".", ",") : "",
+          String(g.valor.toFixed(2)).replace(".", ","),
+          g.kg ? (g.valor / g.kg).toFixed(2).replace(".", ",") : ""
+        ].join(";"));
+      });
+    }
+    baixar("producao-leite.csv", linhas.join("\n"), "text/csv;charset=utf-8", "Copiar a planilha");
+  });
+
+  document.getElementById("exportJson").addEventListener("click", function () {
+    if (!totalGeral() && !db.gastos.length) {
+      avisar("Nada para salvar", "Lance ao menos um dia de produção antes de fazer o backup.");
+      return;
+    }
+    baixar("backup-producao-leite-" + hojeIso() + ".json", textoBackup(), "application/json", "Copiar o backup");
+  });
+
+  // caminho que sempre funciona no celular: copiar o backup e mandar
+  // por WhatsApp para o outro aparelho, que cola em Restaurar backup.
+  document.getElementById("copyJson").addEventListener("click", function () {
+    if (!totalGeral() && !db.gastos.length) {
+      avisar("Nada para copiar", "Lance ao menos um dia de produção antes de fazer o backup.");
+      return;
+    }
+    var txt = textoBackup(), btn = this;
+    copiarTexto(txt, function () {
+      btn.textContent = "Backup copiado";
+      setTimeout(function () { btn.textContent = "Copiar backup"; }, 2200);
+      avisar("Backup copiado", "Agora cole numa mensagem para você mesmo (WhatsApp, e-mail, bloco de notas). " +
+        "No outro celular, abra esta página, toque em Restaurar backup e escolha Colar texto.");
+    }, function () {
+      janelaTexto({
+        titulo: "Copie o backup na mão",
+        detalhe: "Segure o dedo no texto, selecione tudo e copie. Depois é só colar numa mensagem para você mesmo.",
+        valor: txt, leitura: true, textoOk: "Pronto"
+      });
+    });
+  });
+
+  document.getElementById("importBtn").addEventListener("click", function () {
+    perguntar("Restaurar backup",
+      "Escolher arquivo abre o .json salvo no aparelho. Colar texto serve para o backup que veio por mensagem de outro celular.",
+      "Colar texto", false, colarBackup, "Escolher arquivo", function () {
+        document.getElementById("importFile").click();
+      });
+  });
+
+  function colarBackup() {
+    janelaTexto({
+      titulo: "Colar backup",
+      detalhe: "Cole aqui o texto do backup copiado no outro celular.",
+      valor: "", leitura: false, textoOk: "Restaurar",
+      aoConfirmar: function (valor, btn) {
+        var t = (valor || "").trim();
+        if (!t) { btn.textContent = "Cole o texto antes"; return false; }
+        var ok = aplicarBackup(t, function () { btn.textContent = "Texto inválido"; });
+        return ok;   // se inválido, a janela fica aberta para corrigir
+      }
+    });
+  }
+
+  document.getElementById("importFile").addEventListener("change", function (ev) {
+    var file = ev.target.files[0];
+    if (!file) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      aplicarBackup(String(fr.result).replace(/^﻿/, ""), function () {
+        avisar("Arquivo inválido", "Escolha um arquivo de backup gerado por este sistema (termina em .json).");
+      });
+      ev.target.value = "";
+    };
+    fr.onerror = function () {
+      avisar("Não deu para ler o arquivo", "Tente de novo, ou use Restaurar backup › Colar texto.");
+      ev.target.value = "";
+    };
+    fr.readAsText(file);
+  });
+
+  function carregarExemplo() {
+    if (totalGeral()) {
+      perguntar("Carregar 30 dias de exemplo?",
+        "Os dados de exemplo serão somados aos seus lançamentos de verdade.",
+        "Carregar", false, preencherExemplo);
+      return;
+    }
+    preencherExemplo();
+  }
+
+  function preencherExemplo() {
+    var hoje = new Date();
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - i);
+      var base = 620 + Math.sin(i / 4) * 40 + (Math.random() * 50 - 25);
+      db.registros[iso(d)] = { litros: Math.round(base * 10) / 10, vacas: 28, obs: "" };
+    }
+    if (db.config.preco === null) db.config.preco = 2.15;
+    db.config.ultimasVacas = 28;
+    save(); hydrate(); render();
+    msg("Exemplo carregado. Para limpar, use Apagar tudo em Ajustes.", true);
+  }
+  document.getElementById("demoBtn").addEventListener("click", carregarExemplo);
+  document.getElementById("demoBtn2").addEventListener("click", carregarExemplo);
+
+  document.getElementById("wipeBtn").addEventListener("click", function () {
+    var qtdLeite = totalGeral(), qtdRacao = db.gastos.length;
+    if (!qtdLeite && !qtdRacao) { avisar("Não há nada para apagar", "Este navegador ainda não tem lançamentos."); return; }
+    perguntar("Apagar tudo?",
+      "Serão apagados " + qtdLeite + " dia(s) de produção e " + qtdRacao + " compra(s) de ração. " +
+      "Não dá para desfazer — se quiser guardar, cancele e use Salvar backup antes.",
+      "Apagar tudo", true, function () {
+        db.registros = {};
+        db.gastos = [];
+        db.precos = {};
+        save(); render();
+        msg("Todos os lançamentos foram apagados.", true);
+        document.getElementById("settings").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+  });
+
+  /* ---------------- início ---------------- */
+
+  function hydrate() {
+    farm.value = db.config.fazenda;
+    document.getElementById("fPreco").value = db.config.preco !== null ? db.config.preco : "";
+    document.getElementById("fMeta").value = db.config.meta !== null ? db.config.meta : "";
+  }
+
+  document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
+  document.getElementById("receberDados").addEventListener("click", receberDados);
+  document.getElementById("enviarAdmin").addEventListener("click", enviarAoAdmin);
+
+  function iniciarApp() {
+    document.getElementById("gate").hidden = true;
+    document.getElementById("gateBody").innerHTML = "";   // some com os campos da entrada
+    document.getElementById("app").hidden = false;
+    document.getElementById("adminCard").hidden = contas.papel !== "admin";
+    document.getElementById("envioCard").hidden = contas.papel !== "produtor";
+    document.getElementById("fData").value = hojeIso();
+    document.getElementById("gData").value = hojeIso();
+    document.getElementById("fVacas").value = db.config.ultimasVacas || "";
+    hydrate();
+    render();
+    if (!totalGeral()) document.getElementById("settings").open = false;
+  }
+
+  var conviteNoLink = conviteDoEndereco();
+  if (conviteNoLink) {
+    if (!contas) gate("inicio");     // deixa uma tela por trás, o convite manda
+    aplicarConvite(conviteNoLink);
+  }
+  else if (!contas) gate("inicio");
+  else if (contas.sessao && contas.sessao === contas.eu.id) entrar(contas.eu);
+  else gate("login");
+})();
+</script>
+
+
+</body>
+
+</html>
