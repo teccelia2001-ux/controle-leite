@@ -708,6 +708,8 @@
   function save() {
     if (!conta || leitura) return;          // olhando dados de outro: não grava
     try { localStorage.setItem(chaveDados(conta.id), JSON.stringify(db)); } catch (e) {}
+    if (typeof marcarSujo === "function") marcarSujo(true);
+    if (typeof agendarSync === "function") agendarSync();
   }
 
   /* ---------------- contas de acesso ----------------
@@ -1018,6 +1020,364 @@
     planoCompartilhar();
   }
 
+  /* ---------------- servidor ----------------
+     O aparelho continua gravando tudo aqui dentro, como sempre — é o
+     que faz o sistema funcionar sem sinal. O servidor entra por cima:
+     manda o que mudou e traz o que os outros aparelhos mudaram.     */
+
+  var SERVIDOR = {
+    url: "https://jftamlszrsyijfkvknmy.supabase.co",
+    chave: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdGFtbHN6cnN5aWpma3Zrbm15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1OTY2ODEsImV4cCI6MjEwMTE3MjY4MX0.PVLZ3N3OR83tuPKQHPK2RWnrYex8g2SOcyeCYLZP4BM",
+    dominio: "controle-leite.com"
+  };
+  var SESSAO = "controle-leite.sessao.v1";
+  var LIXO = "controle-leite.lixo.";
+
+  var sessao = null;
+  try { sessao = JSON.parse(localStorage.getItem(SESSAO) || "null"); } catch (e) { sessao = null; }
+  var estadoSync = "";      // texto mostrado na barra de quem está usando
+  var syncAgendado = null;
+
+  function temServidor() {
+    return !!(SERVIDOR.url && SERVIDOR.chave && window.fetch);
+  }
+
+  // o login exige formato de e-mail; o produtor só decora o usuário
+  function emailDe(usuario) {
+    return String(usuario).trim().toLowerCase().replace(/[^a-z0-9._-]/g, "") + "@" + SERVIDOR.dominio;
+  }
+
+  function uuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+  function ehUuid(v) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v)); }
+
+  function guardarSessao(j) {
+    sessao = {
+      access: j.access_token,
+      refresh: j.refresh_token,
+      expira: Date.now() + (j.expires_in ? j.expires_in * 1000 : 3600000),
+      uid: j.user ? j.user.id : (sessao ? sessao.uid : null)
+    };
+    try { localStorage.setItem(SESSAO, JSON.stringify(sessao)); } catch (e) {}
+  }
+  function esquecerSessao() {
+    sessao = null;
+    try { localStorage.removeItem(SESSAO); } catch (e) {}
+  }
+
+  function postAuth(caminho, corpo) {
+    return fetch(SERVIDOR.url + "/auth/v1/" + caminho, {
+      method: "POST",
+      headers: { apikey: SERVIDOR.chave, "Content-Type": "application/json" },
+      body: JSON.stringify(corpo)
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, corpo: j }; },
+                           function () { return { ok: r.ok, corpo: {} }; });
+    });
+  }
+
+  function rest(metodo, caminho, corpo, tk, extra) {
+    var h = { apikey: SERVIDOR.chave, "Content-Type": "application/json" };
+    if (tk) h.Authorization = "Bearer " + tk;
+    if (extra) for (var k in extra) h[k] = extra[k];
+    return fetch(SERVIDOR.url + "/rest/v1/" + caminho, {
+      method: metodo, headers: h, body: corpo ? JSON.stringify(corpo) : undefined
+    }).then(function (r) {
+      if (r.status === 204) return { ok: r.ok, corpo: null };
+      return r.json().then(function (j) { return { ok: r.ok, corpo: j }; },
+                           function () { return { ok: r.ok, corpo: null }; });
+    });
+  }
+
+  // devolve um token válido, renovando quando está perto de vencer
+  function token() {
+    if (!sessao) return Promise.resolve(null);
+    if (sessao.expira - Date.now() > 60000) return Promise.resolve(sessao.access);
+    return postAuth("token?grant_type=refresh_token", { refresh_token: sessao.refresh })
+      .then(function (r) {
+        if (!r.ok || !r.corpo.access_token) { esquecerSessao(); return null; }
+        guardarSessao(r.corpo);
+        return sessao.access;
+      }, function () { return null; });
+  }
+
+  function recado(r) {
+    var c = r && r.corpo;
+    if (!c) return "não deu para falar com o servidor";
+    return c.error_description || c.msg || c.message || c.error || "não deu certo";
+  }
+
+  /* ---------------- entrar e criar contas no servidor ---------------- */
+
+  function entrarNoServidor(usuario, senha) {
+    return postAuth("token?grant_type=password", { email: emailDe(usuario), password: senha })
+      .then(function (r) {
+        if (!r.ok || !r.corpo.access_token) return { erro: recado(r), recusado: r.ok === false };
+        guardarSessao(r.corpo);
+        return rest("GET", "perfis?id=eq." + sessao.uid + "&select=*", null, sessao.access)
+          .then(function (p) {
+            var perfil = p.ok && p.corpo && p.corpo[0];
+            if (!perfil) return { erro: "conta sem perfil no servidor" };
+            return { perfil: perfil };
+          });
+      }, function () { return { erro: "sem internet", offline: true }; });
+  }
+
+  function criarAdminNoServidor(nome, usuario, senha) {
+    return postAuth("signup", { email: emailDe(usuario), password: senha })
+      .then(function (r) {
+        if (!r.ok) return { erro: recado(r) };
+        if (!r.corpo.access_token) return { erro: "o servidor ainda pede confirmação de e-mail" };
+        guardarSessao(r.corpo);
+        return rest("POST", "perfis",
+          { id: sessao.uid, nome: nome, usuario: usuario, papel: "admin" },
+          sessao.access, { Prefer: "return=representation" })
+          .then(function (p) {
+            return (p.ok && p.corpo && p.corpo[0]) ? { perfil: p.corpo[0] } : { erro: recado(p) };
+          });
+      }, function () { return { erro: "sem internet", offline: true }; });
+  }
+
+  // cria a conta do produtor sem derrubar a sessão do administrador:
+  // o cadastro devolve um token próprio, usado só para gravar o perfil
+  function criarProdutorNoServidor(nome, usuario, senha, fazenda) {
+    return postAuth("signup", { email: emailDe(usuario), password: senha })
+      .then(function (r) {
+        if (!r.ok) return { erro: recado(r) };
+        var j = r.corpo;
+        if (!j.access_token || !j.user) return { erro: "o servidor ainda pede confirmação de e-mail" };
+        return rest("POST", "perfis", {
+          id: j.user.id, nome: nome, usuario: usuario, papel: "produtor",
+          admin_id: sessao.uid, fazenda: fazenda
+        }, j.access_token, { Prefer: "return=representation" })
+          .then(function (p) {
+            return (p.ok && p.corpo && p.corpo[0]) ? { perfil: p.corpo[0] } : { erro: recado(p) };
+          });
+      }, function () { return { erro: "sem internet", offline: true }; });
+  }
+
+  function mudarSenhaNoServidor(senha) {
+    return token().then(function (tk) {
+      if (!tk) return { erro: "sem sessão" };
+      return fetch(SERVIDOR.url + "/auth/v1/user", {
+        method: "PUT",
+        headers: { apikey: SERVIDOR.chave, "Content-Type": "application/json", Authorization: "Bearer " + tk },
+        body: JSON.stringify({ password: senha })
+      }).then(function (r) { return { ok: r.ok }; }, function () { return { erro: "sem internet" }; });
+    });
+  }
+
+  /* ---------------- o que foi apagado aqui ----------------
+     Apagar é a única coisa que o envio comum não resolve: sem marcar,
+     o registro voltaria do servidor na próxima sincronização.        */
+
+  /* ---------------- tem novidade neste aparelho? ----------------
+     Sem isto, um aparelho que acabou de entrar empurraria o proprio
+     vazio por cima do que os outros ja tinham gravado.             */
+
+  function chaveSujo() { return conta ? chaveDados(conta.id) + ".sujo" : null; }
+
+  function estaSujo() {
+    var k = chaveSujo();
+    return !!(k && localStorage.getItem(k) === "1");
+  }
+  function marcarSujo(v) {
+    var k = chaveSujo();
+    if (!k) return;
+    try { if (v) localStorage.setItem(k, "1"); else localStorage.removeItem(k); } catch (e) {}
+  }
+
+  function lixoDe() {
+    if (!conta) return { registros: [], gastos: [] };
+    try { return JSON.parse(localStorage.getItem(LIXO + conta.id) || '{"registros":[],"gastos":[]}'); }
+    catch (e) { return { registros: [], gastos: [] }; }
+  }
+  function guardarLixo(l) {
+    if (!conta) return;
+    try { localStorage.setItem(LIXO + conta.id, JSON.stringify(l)); } catch (e) {}
+  }
+  function jogarNoLixo(tipo, chave) {
+    var l = lixoDe();
+    if (l[tipo].indexOf(chave) < 0) l[tipo].push(chave);
+    guardarLixo(l);
+  }
+
+  /* ---------------- sincronizar ---------------- */
+
+  function agendarSync(atraso) {
+    if (!temServidor() || !sessao || leitura) return;
+    clearTimeout(syncAgendado);
+    syncAgendado = setTimeout(function () { sincronizar(); }, atraso === undefined ? 1500 : atraso);
+  }
+
+  function sincronizar(aoFim) {
+    if (!temServidor() || !sessao || !conta || leitura) { if (aoFim) aoFim(); return; }
+    marcarSync("enviando…");
+    token().then(function (tk) {
+      if (!tk) { marcarSync("entre de novo para sincronizar"); if (aoFim) aoFim(); return; }
+      var id = conta.id;
+
+      // todo gasto precisa de um código no formato do servidor
+      var mudou = false;
+      db.gastos.forEach(function (g) { if (!ehUuid(g.id)) { g.id = uuid(); mudou = true; } });
+      if (mudou) save();
+
+      var l = lixoDe();
+      var apagar = [];
+      l.registros.forEach(function (d) {
+        apagar.push(rest("DELETE", "registros?produtor_id=eq." + id + "&data=eq." + d, null, tk));
+      });
+      l.gastos.forEach(function (g) {
+        apagar.push(rest("DELETE", "gastos?id=eq." + g, null, tk));
+      });
+
+      Promise.all(apagar).then(function () {
+        guardarLixo({ registros: [], gastos: [] });
+
+        // nada mudou aqui: este aparelho só recebe, nunca sobrescreve
+        if (!estaSujo()) return null;
+
+        var regs = Object.keys(db.registros).map(function (k) {
+          var r = db.registros[k];
+          return { produtor_id: id, data: k, litros: r.litros,
+                   vacas: (typeof r.vacas === "number" ? r.vacas : null), obs: r.obs || null };
+        });
+        var gas = db.gastos.map(function (g) {
+          return { id: g.id, produtor_id: id, data: g.data, valor: g.valor,
+                   kg: (typeof g.kg === "number" ? g.kg : null), descricao: g.desc || null };
+        });
+        var aju = {
+          produtor_id: id, fazenda: db.config.fazenda,
+          preco: db.config.preco, meta: db.config.meta, precos: db.precos || {}
+        };
+
+        var envios = [rest("POST", "ajustes", aju, tk, { Prefer: "resolution=merge-duplicates" })];
+        if (regs.length) envios.push(rest("POST", "registros", regs, tk, { Prefer: "resolution=merge-duplicates" }));
+        if (gas.length) envios.push(rest("POST", "gastos", gas, tk, { Prefer: "resolution=merge-duplicates" }));
+
+        return Promise.all(envios);
+      }).then(function () {
+        marcarSujo(false);
+        return puxarDoServidor(id, tk);
+      }).then(function (novo) {
+        if (novo) {
+          db = novo;
+          try { localStorage.setItem(chaveDados(id), JSON.stringify(db)); } catch (e) {}
+          hydrate();
+          render();
+        }
+        marcarSync("tudo no lugar · " + agoraCurto());
+        if (contas.papel === "admin") puxarProdutores(tk);
+        if (aoFim) aoFim();
+      }, function () {
+        marcarSync("sem internet — vai quando voltar");
+        if (aoFim) aoFim();
+      });
+    });
+  }
+
+  function puxarDoServidor(id, tk) {
+    return Promise.all([
+      rest("GET", "registros?produtor_id=eq." + id + "&select=*", null, tk),
+      rest("GET", "gastos?produtor_id=eq." + id + "&select=*", null, tk),
+      rest("GET", "ajustes?produtor_id=eq." + id + "&select=*", null, tk)
+    ]).then(function (rr) {
+      if (!rr[0].ok || !rr[1].ok || !rr[2].ok) return null;
+      var novo = vazio();
+      (rr[0].corpo || []).forEach(function (r) {
+        novo.registros[r.data] = { litros: Number(r.litros), obs: r.obs || "" };
+        if (r.vacas !== null && r.vacas !== undefined) novo.registros[r.data].vacas = Number(r.vacas);
+      });
+      novo.gastos = (rr[1].corpo || []).map(function (g) {
+        return { id: g.id, data: g.data, valor: Number(g.valor),
+                 kg: (g.kg === null || g.kg === undefined) ? null : Number(g.kg), desc: g.descricao || "" };
+      });
+      var a = (rr[2].corpo || [])[0];
+      if (a) {
+        novo.precos = a.precos || {};
+        novo.config = Object.assign(padraoConfig(), {
+          fazenda: a.fazenda || padraoConfig().fazenda,
+          preco: a.preco === null || a.preco === undefined ? null : Number(a.preco),
+          meta: a.meta === null || a.meta === undefined ? null : Number(a.meta),
+          ultimasVacas: db.config.ultimasVacas
+        });
+      } else {
+        novo.config = db.config;
+        novo.precos = db.precos;
+      }
+      return novo;
+    });
+  }
+
+  // a lista de produtores passa a vir do servidor, com a produção deles
+  function puxarProdutores(tk) {
+    return rest("GET", "perfis?admin_id=eq." + conta.id + "&select=id,nome,usuario,fazenda,criado_em", null, tk)
+      .then(function (r) {
+        if (!r.ok || !Array.isArray(r.corpo)) return;
+        var antigos = {};
+        contas.produtores.forEach(function (p) { antigos[p.id] = p; });
+        contas.produtores = r.corpo.map(function (p) {
+          var v = antigos[p.id] || {};
+          return { id: p.id, nome: p.nome, usuario: p.usuario, fazenda: p.fazenda || p.nome,
+                   criado: (p.criado_em || "").slice(0, 10), recebido: v.recebido || null,
+                   dados: v.dados || null, doServidor: true };
+        });
+        salvarContas();
+        var vindas = contas.produtores.map(function (p) {
+          return rest("GET", "registros?produtor_id=eq." + p.id + "&select=data,litros,vacas,obs", null, tk)
+            .then(function (rr) {
+              if (!rr.ok || !Array.isArray(rr.corpo)) return;
+              var d = vazio();
+              d.config.fazenda = p.fazenda;
+              rr.corpo.forEach(function (x) {
+                d.registros[x.data] = { litros: Number(x.litros), obs: x.obs || "" };
+                if (x.vacas !== null && x.vacas !== undefined) d.registros[x.data].vacas = Number(x.vacas);
+              });
+              return rest("GET", "gastos?produtor_id=eq." + p.id + "&select=*", null, tk).then(function (rg) {
+                if (rg.ok && Array.isArray(rg.corpo)) {
+                  d.gastos = rg.corpo.map(function (g) {
+                    return { id: g.id, data: g.data, valor: Number(g.valor),
+                             kg: g.kg === null ? null : Number(g.kg), desc: g.descricao || "" };
+                  });
+                }
+                return rest("GET", "ajustes?produtor_id=eq." + p.id + "&select=*", null, tk).then(function (ra) {
+                  var a = ra.ok && ra.corpo && ra.corpo[0];
+                  if (a) {
+                    d.precos = a.precos || {};
+                    d.config.fazenda = a.fazenda || p.fazenda;
+                    d.config.preco = a.preco === null ? null : Number(a.preco);
+                  }
+                  if (Object.keys(d.registros).length || d.gastos.length) {
+                    p.dados = d;
+                    p.recebido = hojeIso();
+                  }
+                });
+              });
+            });
+        });
+        return Promise.all(vindas).then(function () {
+          salvarContas();
+          renderProdutores();
+        });
+      });
+  }
+
+  function agoraCurto() {
+    var d = new Date();
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function marcarSync(txt) {
+    estadoSync = txt;
+    var el = document.getElementById("sincStatus");
+    if (el) el.textContent = txt;
+  }
+
   /* ---------------- janela com campos ---------------- */
 
   function janelaForm(op) {
@@ -1083,6 +1443,31 @@
 
   /* ---------------- tela de entrada ---------------- */
 
+  // guarda aqui dentro o perfil que veio do servidor, para o próximo
+  // login funcionar mesmo sem sinal
+  function aplicarPerfil(perfil, senha) {
+    return criarSenha(senha).then(function (h) {
+      var manter = (contas && contas.papel === "admin" && perfil.papel === "admin" && contas.eu.id === perfil.id)
+        ? contas.produtores : [];
+      contas = {
+        papel: perfil.papel,
+        eu: { id: perfil.id, nome: perfil.nome, usuario: perfil.usuario, senha: h },
+        produtores: manter,
+        sessao: perfil.id
+      };
+      salvarContas();
+      entrar(contas.eu);
+      // primeira vez neste aparelho: usa o nome da propriedade do cadastro
+      if (perfil.fazenda && db.config.fazenda === padraoConfig().fazenda && !totalGeral()) {
+        db.config.fazenda = perfil.fazenda;
+        save();
+        hydrate();
+        render();
+      }
+      agendarSync(200);
+    });
+  }
+
   function gate(estado) {
     var g = document.getElementById("gate");
     document.getElementById("app").hidden = true;
@@ -1092,16 +1477,62 @@
     var corpo = document.getElementById("gateBody");
 
     if (estado === "inicio") {
-      tit.textContent = "Primeiro acesso";
-      sub.textContent = "Este aparelho ainda não tem acesso. Se você comanda o controle, crie o acesso de administrador. " +
-        "Se o administrador te mandou um código de convite, use a segunda opção.";
+      tit.textContent = "Entrar";
+      sub.textContent = temServidor()
+        ? "Se você já tem usuário e senha, entre direto — vale em qualquer aparelho."
+        : "Este aparelho ainda não tem acesso.";
       corpo.innerHTML =
         '<div class="gate-form">' +
-          '<button class="btn-primary" data-ir="admin-novo">Sou o administrador</button>' +
+          (temServidor() ? '<button class="btn-primary" data-ir="servidor">Já tenho usuário e senha</button>' : "") +
+          '<button' + (temServidor() ? "" : ' class="btn-primary"') + ' data-ir="admin-novo">Criar acesso de administrador</button>' +
           '<button data-ir="convite">Recebi um código de convite</button>' +
         "</div>";
+      var bs = corpo.querySelector('[data-ir="servidor"]');
+      if (bs) bs.addEventListener("click", function () { gate("servidor"); });
       corpo.querySelector('[data-ir="admin-novo"]').addEventListener("click", function () { gate("admin-novo"); });
       corpo.querySelector('[data-ir="convite"]').addEventListener("click", function () { gate("convite"); });
+      return;
+    }
+
+    // entrada em aparelho que nunca foi usado: confere direto no servidor
+    if (estado === "servidor") {
+      tit.textContent = "Entrar";
+      sub.textContent = "Use o usuário e a senha que já funcionam nos seus outros aparelhos.";
+      corpo.innerHTML =
+        '<div class="gate-form">' +
+          campoHtml([
+            { id: "usuario", label: "Usuário", placeholder: "ex.: jeferson" },
+            { id: "senha", label: "Senha", tipo: "password" }
+          ]) +
+          '<div class="gate-msg" data-msg></div>' +
+          '<button class="btn-primary" data-ok>Entrar</button>' +
+        "</div>" +
+        '<div class="gate-alt"><button data-voltar>Voltar</button></div>';
+      var avS = corpo.querySelector("[data-msg]");
+      var btnS = corpo.querySelector("[data-ok]");
+      corpo.querySelector("[data-voltar]").addEventListener("click", function () { gate("inicio"); });
+
+      function entrarS() {
+        var u = corpo.querySelector("#f_usuario").value.trim();
+        var s = corpo.querySelector("#f_senha").value;
+        if (!u || !s) { avS.textContent = "Preencha usuário e senha."; return; }
+        avS.textContent = "conferindo…";
+        btnS.disabled = true;
+        entrarNoServidor(u, s).then(function (r) {
+          btnS.disabled = false;
+          if (r.perfil) { avS.textContent = ""; aplicarPerfil(r.perfil, s); return; }
+          avS.textContent = r.offline
+            ? "Sem internet. Neste aparelho, a primeira entrada precisa de conexão."
+            : "Usuário ou senha errados.";
+        }, function () {
+          btnS.disabled = false;
+          avS.textContent = "Não deu para falar com o servidor.";
+        });
+      }
+      btnS.addEventListener("click", entrarS);
+      corpo.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); entrarS(); }
+      });
       return;
     }
 
@@ -1129,21 +1560,42 @@
         if (!v.nome || !v.usuario) { av.textContent = "Preencha o nome e o usuário."; return; }
         if (v.senha.length < 4) { av.textContent = "A senha precisa de pelo menos 4 caracteres."; return; }
         if (v.senha !== v.senha2) { av.textContent = "As duas senhas não são iguais."; return; }
-        this.disabled = true;
-        criarSenha(v.senha).then(function (s) {
-          contas = {
-            papel: "admin",
-            eu: { id: "admin", nome: v.nome, usuario: v.usuario, senha: s },
-            produtores: [],
-            sessao: "admin"
-          };
-          // aproveita os lançamentos que já existiam neste aparelho
-          var antigo = localStorage.getItem(STORE);
-          if (antigo && !localStorage.getItem(chaveDados("admin"))) {
-            try { localStorage.setItem(chaveDados("admin"), antigo); } catch (e) {}
+        var botao = this;
+        botao.disabled = true;
+
+        function gravar(id) {
+          return criarSenha(v.senha).then(function (s) {
+            contas = {
+              papel: "admin",
+              eu: { id: id, nome: v.nome, usuario: v.usuario, senha: s },
+              produtores: [],
+              sessao: id
+            };
+            // aproveita os lançamentos que já existiam neste aparelho
+            var antigo = localStorage.getItem(STORE);
+            if (antigo && !localStorage.getItem(chaveDados(id))) {
+              try { localStorage.setItem(chaveDados(id), antigo); } catch (e) {}
+            }
+            salvarContas();
+            entrar(contas.eu);
+          });
+        }
+
+        if (!temServidor()) { gravar("admin"); return; }
+        av.textContent = "criando no servidor…";
+        criarAdminNoServidor(v.nome, v.usuario, v.senha).then(function (r) {
+          if (r.perfil) { gravar(r.perfil.id).then(function () { agendarSync(200); }); return; }
+          botao.disabled = false;
+          if (r.offline) {
+            av.textContent = "";
+            perguntar("Sem internet agora",
+              "Dá para criar só neste aparelho e ligar no servidor depois, mas aí o acesso ainda não vale em outros aparelhos.",
+              "Criar só aqui", false, function () { gravar("admin"); });
+            return;
           }
-          salvarContas();
-          entrar(contas.eu);
+          av.textContent = /already|registered|exists/i.test(r.erro)
+            ? "Já existe uma conta com esse usuário."
+            : "Não deu para criar: " + r.erro;
         });
       });
       return;
@@ -1208,20 +1660,38 @@
     var av3 = corpo.querySelector("[data-msg]");
     var btn = corpo.querySelector("[data-ok]");
 
+    // primeiro tenta o servidor (vale em qualquer aparelho); sem
+    // internet, confere a senha guardada aqui e entra assim mesmo
     function tentar() {
       var u = corpo.querySelector("#f_usuario").value;
       var s = corpo.querySelector("#f_senha").value;
       av3.textContent = "";
-      if (!usuarioIgual(u, contas.eu.usuario)) { av3.textContent = "Usuário ou senha errados."; return; }
       btn.disabled = true;
-      conferirSenha(contas.eu.senha, s).then(function (ok) {
-        btn.disabled = false;
-        if (!ok) { av3.textContent = "Usuário ou senha errados."; return; }
-        contas.sessao = contas.eu.id;
-        salvarContas();
-        entrar(contas.eu);
-      });
+
+      function local() {
+        if (!usuarioIgual(u, contas.eu.usuario)) { btn.disabled = false; av3.textContent = "Usuário ou senha errados."; return; }
+        conferirSenha(contas.eu.senha, s).then(function (ok) {
+          btn.disabled = false;
+          if (!ok) { av3.textContent = "Usuário ou senha errados."; return; }
+          contas.sessao = contas.eu.id;
+          salvarContas();
+          entrar(contas.eu);
+        });
+      }
+
+      if (!temServidor()) { local(); return; }
+      av3.textContent = "";
+      entrarNoServidor(u, s).then(function (r) {
+        if (r.perfil) {
+          btn.disabled = false;
+          aplicarPerfil(r.perfil, s);
+          return;
+        }
+        // sem internet, ou conta criada só neste aparelho: confere aqui
+        local();
+      }, function () { local(); });
     }
+
     btn.addEventListener("click", tentar);
     corpo.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); tentar(); }
@@ -1286,6 +1756,8 @@
   function sair() {
     contas.sessao = null;
     salvarContas();
+    esquecerSessao();
+    estadoSync = "";
     conta = null; leitura = false; db = vazio();
     document.body.classList.remove("leitura");
     gate("login");
@@ -1312,7 +1784,12 @@
     el.innerHTML = '<span class="tag">' + (contas.papel === "admin" ? "Administrador" : "Produtor") + "</span>" +
       "<strong>" + escapeHtml(conta.nome) + "</strong>" +
       '<span>' + escapeHtml(conta.usuario) + "</span>" +
-      '<span class="espaco"></span><button id="sairBtn" class="btn-ghost">Sair</button>';
+      '<span class="espaco"></span>' +
+      '<span id="sincStatus" style="font-size:12px">' + escapeHtml(estadoSync) + "</span>" +
+      (temServidor() && sessao ? '<button id="sincBtn" class="btn-ghost">Sincronizar</button>' : "") +
+      '<button id="sairBtn" class="btn-ghost">Sair</button>';
+    var bs = el.querySelector("#sincBtn");
+    if (bs) bs.addEventListener("click", function () { sincronizar(); });
     el.querySelector("#sairBtn").addEventListener("click", sair);
   }
 
@@ -1414,18 +1891,32 @@
         if (contas.produtores.some(function (p) { return usuarioIgual(p.usuario, usuario); })) {
           aviso("Já existe um produtor com esse usuário."); return false;
         }
-        return criarSenha(v.senha).then(function (s) {
-          var p = {
-            id: novoId(), nome: nome, usuario: usuario, senha: s,
-            fazenda: v.fazenda.trim() || nome,
-            criado: hojeIso(), recebido: null, dados: null
-          };
-          contas.produtores.push(p);
-          salvarContas();
-          renderProdutores();
-          mostrarConvite(p, v.senha);
-          return true;
-        });
+        function guardar(id, doServidor) {
+          return criarSenha(v.senha).then(function (s) {
+            var p = {
+              id: id, nome: nome, usuario: usuario, senha: s,
+              fazenda: v.fazenda.trim() || nome,
+              criado: hojeIso(), recebido: null, dados: null, doServidor: !!doServidor
+            };
+            contas.produtores.push(p);
+            salvarContas();
+            renderProdutores();
+            mostrarConvite(p, v.senha);
+            return true;
+          });
+        }
+
+        if (!temServidor() || !sessao) return guardar(novoId(), false);
+        aviso("criando no servidor…");
+        return criarProdutorNoServidor(nome, usuario, v.senha, v.fazenda.trim() || nome)
+          .then(function (r) {
+            if (r.perfil) return guardar(r.perfil.id, true);
+            if (/already|registered|exists/i.test(r.erro || "")) {
+              aviso("Já existe uma conta com esse usuário."); return false;
+            }
+            aviso("Não deu para criar no servidor: " + r.erro);
+            return false;
+          });
       }
     });
   }
@@ -2018,6 +2509,7 @@
           "Os " + nL(r.litros, 1) + " L lançados nesse dia serão removidos.",
           "Excluir", true, function () {
             delete db.registros[k];
+            jogarNoLixo("registros", k);
             save(); render();
             msg("Lançamento de " + diaCurto(k) + " excluído.", true);
           });
@@ -2061,6 +2553,7 @@
           nBRL(g.valor) + " em " + diaCurto(g.data) + (g.desc ? " — " + g.desc : "") + ".",
           "Excluir", true, function () {
             db.gastos = db.gastos.filter(function (x) { return String(x.id) !== id; });
+            jogarNoLixo("gastos", id);
             save(); render();
             gastoMsg("Compra excluída.", true);
           });
@@ -2864,10 +3357,15 @@
     else aplicarConvite(noLink.corpo);
   }
   else if (!contas) gate("inicio");
-  else if (contas.sessao && contas.sessao === contas.eu.id) entrar(contas.eu);
+  else if (contas.sessao && contas.sessao === contas.eu.id) { entrar(contas.eu); agendarSync(400); }
   else gate("login");
+
+  // volta a internet: manda o que ficou pendente
+  window.addEventListener("online", function () { agendarSync(1000); });
 })();
 </script>
+
+
 
 
 </body>
