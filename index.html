@@ -66,6 +66,10 @@
 
   * { box-sizing: border-box; }
 
+  /* esconder tem que esconder: sem isto, o display:flex das telas
+     vence o atributo hidden e a entrada aparece junto com o sistema */
+  [hidden] { display: none !important; }
+
   body {
     margin: 0;
     background: var(--ground);
@@ -691,7 +695,7 @@
                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   var SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
-  var VERSAO = "01/08 14:42";
+  var VERSAO = "01/08 15:10";
   var CONTAS = "controle-leite.contas.v1";
   var PREFIXO = "controle-leite.dados.";
 
@@ -1167,20 +1171,173 @@
 
   // cria a conta do produtor sem derrubar a sessão do administrador:
   // o cadastro devolve um token próprio, usado só para gravar o perfil
-  function criarProdutorNoServidor(nome, usuario, senha, fazenda) {
+  function criarProdutorNoServidor(nome, usuario, senha, fazenda, dados) {
     return postAuth("signup", { email: emailDe(usuario), password: senha })
       .then(function (r) {
         if (!r.ok) return { erro: recado(r) };
         var j = r.corpo;
         if (!j.access_token || !j.user) return { erro: "o servidor ainda pede confirmação de e-mail" };
+        var tk = j.access_token, uid = j.user.id;
         return rest("POST", "perfis", {
-          id: j.user.id, nome: nome, usuario: usuario, papel: "produtor",
+          id: uid, nome: nome, usuario: usuario, papel: "produtor",
           admin_id: sessao.uid, fazenda: fazenda
-        }, j.access_token, { Prefer: "return=representation" })
+        }, tk, { Prefer: "return=representation" })
           .then(function (p) {
-            return (p.ok && p.corpo && p.corpo[0]) ? { perfil: p.corpo[0] } : { erro: recado(p) };
+            if (!p.ok || !p.corpo || !p.corpo[0]) return { erro: recado(p) };
+            var perfil = p.corpo[0];
+            if (!dados) return { perfil: perfil };
+            // leva junto o que este produtor já tinha guardado aqui
+            var envios = [];
+            var regs = Object.keys(dados.registros || {}).map(function (k) {
+              var x = dados.registros[k];
+              return { produtor_id: uid, data: k, litros: x.litros,
+                       vacas: (typeof x.vacas === "number" ? x.vacas : null), obs: x.obs || null };
+            });
+            if (regs.length) envios.push(rest("POST", "registros", regs, tk, { Prefer: "resolution=merge-duplicates" }));
+            var gas = (dados.gastos || []).map(function (g) {
+              return { id: ehUuid(g.id) ? g.id : uuid(), produtor_id: uid, data: g.data, valor: g.valor,
+                       kg: (typeof g.kg === "number" ? g.kg : null), descricao: g.desc || null };
+            });
+            if (gas.length) envios.push(rest("POST", "gastos", gas, tk, { Prefer: "resolution=merge-duplicates" }));
+            envios.push(rest("POST", "ajustes", {
+              produtor_id: uid, fazenda: (dados.config && dados.config.fazenda) || fazenda,
+              preco: dados.config ? dados.config.preco : null,
+              meta: dados.config ? dados.config.meta : null,
+              precos: dados.precos || {}
+            }, tk, { Prefer: "resolution=merge-duplicates" }));
+            return Promise.all(envios).then(function () { return { perfil: perfil, subiu: regs.length }; });
           });
       }, function () { return { erro: "sem internet", offline: true }; });
+  }
+
+  // administrador que nasceu só neste aparelho ganha conta de verdade,
+  // levando junto os lançamentos e a lista de produtores
+  function ligarAdminAoServidor() {
+    janelaForm({
+      titulo: "Ligar este acesso ao servidor",
+      detalhe: "Se você já tem conta no servidor, entre com ela. Se ainda não tem, marque para criar agora — " +
+        "os seus lançamentos e a sua lista de produtores continuam aqui.",
+      campos: [
+        { id: "usuario", label: "Usuário", valor: conta.usuario },
+        { id: "senha", label: "Senha", tipo: "password" }
+      ],
+      textoOk: "Ligar",
+      extra: {
+        rotulo: "Ainda não tenho conta",
+        acao: function () { criarContaAdmin(); }
+      },
+      aoConfirmar: function (v, aviso) {
+        var u = v.usuario.trim();
+        if (!u || !v.senha) { aviso("Preencha usuário e senha."); return false; }
+        aviso("conferindo…");
+        return entrarNoServidor(u, v.senha).then(function (r) {
+          if (r.perfil) {
+            var guardados = contas.produtores;
+            aplicarPerfil(r.perfil, v.senha).then(function () {
+              // a lista local de produtores não se perde ao trocar de conta
+              var vistos = {};
+              contas.produtores.forEach(function (x) { vistos[x.usuario.toLowerCase()] = true; });
+              guardados.forEach(function (x) {
+                if (!vistos[x.usuario.toLowerCase()]) contas.produtores.push(x);
+              });
+              salvarContas();
+              render();
+            });
+            return true;
+          }
+          aviso(r.offline ? "Sem internet agora." : "Usuário ou senha errados — ou a conta ainda não existe lá.");
+          return false;
+        }, function () { aviso("Não deu para falar com o servidor."); return false; });
+      }
+    });
+  }
+
+  function criarContaAdmin() {
+    janelaForm({
+      titulo: "Criar sua conta no servidor",
+      detalhe: "Escolha o usuário e a senha que você vai usar em todos os aparelhos.",
+      campos: [
+        { id: "usuario", label: "Usuário", valor: conta.usuario },
+        { id: "senha", label: "Senha", tipo: "password" },
+        { id: "senha2", label: "Repita a senha", tipo: "password" }
+      ],
+      textoOk: "Criar",
+      aoConfirmar: function (v, aviso) {
+        var u = v.usuario.trim();
+        if (!u) { aviso("Informe o usuário."); return false; }
+        if (v.senha.length < 4) { aviso("A senha precisa de pelo menos 4 caracteres."); return false; }
+        if (v.senha !== v.senha2) { aviso("As duas senhas não são iguais."); return false; }
+        aviso("criando…");
+        return criarAdminNoServidor(conta.nome, u, v.senha).then(function (r) {
+          if (!r.perfil) {
+            aviso(/already|registered|exists/i.test(r.erro || "")
+              ? "Já existe conta com esse usuário. Use 'Ligar' com a senha dela."
+              : "Não deu: " + r.erro);
+            return false;
+          }
+          var guardados = contas.produtores;
+          var dadosVelhos = localStorage.getItem(chaveDados(conta.id));
+          return criarSenha(v.senha).then(function (h) {
+            var novoId = r.perfil.id;
+            if (dadosVelhos && !localStorage.getItem(chaveDados(novoId))) {
+              try {
+                localStorage.setItem(chaveDados(novoId), dadosVelhos);
+                localStorage.setItem(chaveDados(novoId) + ".sujo", "1");
+              } catch (e) {}
+            }
+            contas = {
+              papel: "admin",
+              eu: { id: novoId, nome: conta.nome, usuario: u, senha: h },
+              produtores: guardados,
+              sessao: novoId
+            };
+            salvarContas();
+            entrar(contas.eu);
+            sincronizar();
+            avisar("Conta criada", "Agora este acesso vale em qualquer aparelho. " +
+              "Os produtores marcados em vermelho ainda existem só aqui — use " +
+              "'Criar no servidor' em cada um para que a produção deles chegue até você.");
+            return true;
+          });
+        });
+      }
+    });
+  }
+
+  // produtor que nasceu só neste aparelho ganha conta de verdade
+  function promoverProdutor(p) {
+    if (!p || !sessao) return;
+    janelaForm({
+      titulo: "Criar " + p.nome + " no servidor",
+      detalhe: "Este acesso existe só neste aparelho. Defina a senha dele: a conta passa a valer " +
+        "em qualquer celular e o que ele já tem aqui vai junto.",
+      campos: [
+        { id: "usuario", label: "Usuário", valor: p.usuario },
+        { id: "senha", label: "Senha", tipo: "password" }
+      ],
+      textoOk: "Criar no servidor",
+      aoConfirmar: function (v, aviso) {
+        var u = v.usuario.trim();
+        if (!u) { aviso("Informe o usuário."); return false; }
+        if (v.senha.length < 4) { aviso("A senha precisa de pelo menos 4 caracteres."); return false; }
+        aviso("criando…");
+        return criarProdutorNoServidor(p.nome, u, v.senha, p.fazenda || p.nome, p.dados)
+          .then(function (r) {
+            if (!r.perfil) {
+              aviso(/already|registered|exists/i.test(r.erro || "")
+                ? "Já existe uma conta com esse usuário no servidor."
+                : "Não deu: " + r.erro);
+              return false;
+            }
+            contas.produtores = contas.produtores.filter(function (o) { return o.id !== p.id; });
+            salvarContas();
+            sincronizar();
+            avisar("Pronto", p.nome + " agora tem conta no servidor. Passe para ele o usuário " + u +
+              " e a senha que você acabou de definir, para ele entrar em 'Já tenho usuário e senha'.");
+            return true;
+          });
+      }
+    });
   }
 
   function mudarSenhaNoServidor(senha) {
@@ -1343,14 +1500,22 @@
         if (!r.ok || !Array.isArray(r.corpo)) return;
         var antigos = {};
         contas.produtores.forEach(function (p) { antigos[p.id] = p; });
-        contas.produtores = r.corpo.map(function (p) {
+        var doServidor = r.corpo.map(function (p) {
           var v = antigos[p.id] || {};
           return { id: p.id, nome: p.nome, usuario: p.usuario, fazenda: p.fazenda || p.nome,
                    criado: (p.criado_em || "").slice(0, 10), recebido: v.recebido || null,
                    dados: v.dados || null, doServidor: true };
         });
+        // os que ainda existem só neste aparelho continuam na lista,
+        // senão sumiriam antes de o administrador poder criá-los lá
+        var nomes = {};
+        doServidor.forEach(function (p) { nomes[String(p.usuario).toLowerCase()] = true; });
+        var locais = contas.produtores.filter(function (p) {
+          return !p.doServidor && !nomes[String(p.usuario).toLowerCase()];
+        });
+        contas.produtores = doServidor.concat(locais);
         salvarContas();
-        var vindas = contas.produtores.map(function (p) {
+        var vindas = doServidor.map(function (p) {
           return rest("GET", "registros?produtor_id=eq." + p.id + "&select=data,litros,vacas,obs", null, tk)
             .then(function (rr) {
               if (!rr.ok || !Array.isArray(rr.corpo)) return;
@@ -1904,13 +2069,17 @@
           '<div class="prod-num">' + (s && s.sobra !== null ? nBRL(s.sobra) : "—") + "<small>sobra</small></div>" +
           '<div class="prod-acoes">' +
             (p.dados ? '<button data-ver="' + p.id + '">Abrir</button>' : "") +
-            '<button data-convite="' + p.id + '">Convite</button>' +
+            (!p.doServidor && sessao ? '<button class="btn-primary" data-promover="' + p.id + '">Criar no servidor</button>' : "") +
+            (p.doServidor ? "" : '<button data-convite="' + p.id + '">Convite</button>') +
             '<button data-editar="' + p.id + '">Editar</button>' +
           "</div></div>";
       }).join("");
 
       el.querySelectorAll("[data-ver]").forEach(function (b) {
         b.addEventListener("click", function () { abrirProdutor(this.getAttribute("data-ver")); });
+      });
+      el.querySelectorAll("[data-promover]").forEach(function (b) {
+        b.addEventListener("click", function () { promoverProdutor(acharProdutor(this.getAttribute("data-promover"))); });
       });
       el.querySelectorAll("[data-convite]").forEach(function (b) {
         b.addEventListener("click", function () { mostrarConvite(acharProdutor(this.getAttribute("data-convite"))); });
@@ -1932,9 +2101,10 @@
       if (temServidor() && !sessao) {
         alerta.hidden = false;
         alerta.innerHTML = "<strong>Este acesso não está ligado ao servidor.</strong> " +
-          "Ele foi criado só neste aparelho, então a produção dos produtores não chega aqui. " +
-          "Toque em <strong>Sair</strong> e entre de novo: se ainda não tem conta no servidor, " +
-          "use <strong>Criar acesso de administrador</strong> — aí os produtores criados passam a valer em qualquer aparelho.";
+          "Enquanto ficar assim, a produção dos produtores não chega aqui e nada aparece nos seus outros aparelhos. " +
+          '<button id="ligarAdmin" class="btn-primary" style="margin-left:6px">Ligar ao servidor</button>';
+        var ba = alerta.querySelector("#ligarAdmin");
+        if (ba) ba.addEventListener("click", ligarAdminAoServidor);
       } else {
         alerta.hidden = true;
       }
@@ -3430,7 +3600,11 @@
     var L = [];
     L.push("versão: " + VERSAO);
     L.push("endereço: " + location.host);
-    L.push("conta: " + (conta ? conta.usuario + " (" + (contas.papel || "?") + ")" : "ninguém"));
+    L.push("conta: " + (conta ? conta.usuario + " (" + (contas.papel || "?") + ")" : "ninguém — NÃO ESTÁ LOGADO"));
+    if (contas && contas.eu) {
+      L.push("acesso guardado aqui: " + contas.eu.usuario + " (" + contas.papel + ") " +
+        (ehUuid(contas.eu.id) ? "[do servidor]" : "[SÓ AQUI]"));
+    }
     L.push("id da conta: " + (conta ? conta.id : "—"));
     L.push("conta no servidor: " + (conta && ehUuid(conta.id) ? "sim" : "NÃO — nasceu só neste aparelho"));
     L.push("sessão no servidor: " + (sessao ? "sim" : "NÃO"));
