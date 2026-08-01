@@ -601,6 +601,23 @@
     </div>
   </section>
 
+  <section class="card" id="ligarCard" hidden>
+    <div class="card-head">
+      <h2>Ligar ao servidor</h2>
+      <span class="hint">Enquanto não ligar, o administrador não vê os seus lançamentos</span>
+    </div>
+    <div class="card-body">
+      <p style="margin:0 0 14px;color:var(--ink-2);max-width:62ch">
+        Este acesso está guardado só neste aparelho. Entre com o usuário e a senha que o
+        administrador te passou: o que você já lançou vai junto, e daí em diante a sua produção
+        chega direto para ele.
+      </p>
+      <div class="tools">
+        <button id="ligarServidor" class="btn-primary">Ligar ao servidor</button>
+      </div>
+    </div>
+  </section>
+
   <section class="card" id="envioCard" hidden>
     <div class="card-head">
       <h2>Mandar para o administrador</h2>
@@ -1446,7 +1463,48 @@
 
   // guarda aqui dentro o perfil que veio do servidor, para o próximo
   // login funcionar mesmo sem sinal
+  // Quem já usava o sistema só neste aparelho e agora entra pelo
+  // servidor não pode perder o que lançou: os dias vão junto.
+  function migrarParaServidor(perfil) {
+    var antigo = contas && contas.eu ? contas.eu : null;
+    if (!antigo || antigo.id === perfil.id) return false;
+    if (!usuarioIgual(antigo.usuario, perfil.usuario)) return false;
+
+    var bruto = null;
+    try { bruto = localStorage.getItem(chaveDados(antigo.id)); } catch (e) {}
+    if (!bruto) return false;
+
+    var velho, destino;
+    try { velho = normalizar(JSON.parse(bruto)); } catch (e) { return false; }
+    try { destino = normalizar(JSON.parse(localStorage.getItem(chaveDados(perfil.id)) || "null")); }
+    catch (e) { destino = vazio(); }
+
+    var trouxe = 0;
+    Object.keys(velho.registros).forEach(function (k) {
+      if (!destino.registros[k]) { destino.registros[k] = velho.registros[k]; trouxe++; }
+    });
+    var tem = {};
+    destino.gastos.forEach(function (g) { tem[g.id] = true; });
+    velho.gastos.forEach(function (g) { if (!tem[g.id]) { destino.gastos.push(g); trouxe++; } });
+    if (destino.config.fazenda === padraoConfig().fazenda && velho.config.fazenda) {
+      destino.config.fazenda = velho.config.fazenda;
+    }
+    if (destino.config.preco === null) destino.config.preco = velho.config.preco;
+    if (destino.config.meta === null) destino.config.meta = velho.config.meta;
+    Object.keys(velho.precos || {}).forEach(function (k) {
+      if (destino.precos[k] === undefined) destino.precos[k] = velho.precos[k];
+    });
+
+    if (!trouxe) return false;
+    try {
+      localStorage.setItem(chaveDados(perfil.id), JSON.stringify(destino));
+      localStorage.setItem(chaveDados(perfil.id) + ".sujo", "1");   // sobe na sincronização
+    } catch (e) {}
+    return trouxe;
+  }
+
   function aplicarPerfil(perfil, senha) {
+    var trouxe = migrarParaServidor(perfil);
     return criarSenha(senha).then(function (h) {
       var manter = (contas && contas.papel === "admin" && perfil.papel === "admin" && contas.eu.id === perfil.id)
         ? contas.produtores : [];
@@ -1466,6 +1524,11 @@
         render();
       }
       agendarSync(200);
+      if (trouxe) {
+        avisar("Lançamentos aproveitados",
+          "Este aparelho tinha " + trouxe + " lançamento(s) guardado(s) só aqui. " +
+          "Eles foram ligados à sua conta e vão para o servidor agora.");
+      }
     });
   }
 
@@ -3351,6 +3414,28 @@
   document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
   document.getElementById("receberDados").addEventListener("click", receberDados);
   document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
+
+  document.getElementById("ligarServidor").addEventListener("click", function () {
+    janelaForm({
+      titulo: "Ligar ao servidor",
+      detalhe: "Use o usuário e a senha que o administrador te passou.",
+      campos: [
+        { id: "usuario", label: "Usuário", valor: conta.usuario },
+        { id: "senha", label: "Senha", tipo: "password" }
+      ],
+      textoOk: "Ligar",
+      aoConfirmar: function (v, aviso) {
+        var u = v.usuario.trim();
+        if (!u || !v.senha) { aviso("Preencha usuário e senha."); return false; }
+        aviso("conferindo…");
+        return entrarNoServidor(u, v.senha).then(function (r) {
+          if (r.perfil) { aplicarPerfil(r.perfil, v.senha); return true; }
+          aviso(r.offline ? "Sem internet agora." : "Usuário ou senha errados.");
+          return false;
+        }, function () { aviso("Não deu para falar com o servidor."); return false; });
+      }
+    });
+  });
   document.getElementById("enviarAdmin").addEventListener("click", enviarAoAdmin);
 
   function iniciarApp() {
@@ -3359,6 +3444,7 @@
     document.getElementById("app").hidden = false;
     document.getElementById("adminCard").hidden = contas.papel !== "admin";
     document.getElementById("envioCard").hidden = contas.papel !== "produtor";
+    document.getElementById("ligarCard").hidden = !(temServidor() && !sessao && contas.papel === "produtor");
     document.getElementById("fData").value = hojeIso();
     document.getElementById("gData").value = hojeIso();
     document.getElementById("fVacas").value = db.config.ultimasVacas || "";
