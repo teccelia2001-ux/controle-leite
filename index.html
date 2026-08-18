@@ -173,6 +173,35 @@
   }
   .sec-head p { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
 
+  /* ---------- abas do produtor ----------
+     Botões grandes, porque o uso é no celular, no curral, muitas vezes com
+     a mão suja. Em telas estreitas viram dois por linha em vez de encolher. */
+
+  .abas { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; }
+  .aba {
+    display: flex; align-items: center; gap: 11px; text-align: left;
+    padding: 13px 14px; border-radius: 11px;
+    border: 1.5px solid var(--line); background: var(--surface);
+  }
+  .aba:hover:not(:disabled) { border-color: var(--muted); background: var(--surface); }
+  .aba .ico {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 9px;
+    display: grid; place-items: center; font-size: 17px;
+    background: var(--surface-2); color: var(--ink-2);
+  }
+  .aba .txt { display: flex; flex-direction: column; min-width: 0; }
+  .aba .txt b { font-size: 14px; font-weight: 600; line-height: 1.2; }
+  .aba .txt small { font-size: 11.5px; color: var(--muted); line-height: 1.2; }
+  .aba[aria-current="page"] { background: var(--accent); border-color: var(--accent); }
+  .aba[aria-current="page"] .txt b { color: var(--surface); }
+  .aba[aria-current="page"] .txt small { color: var(--surface); opacity: .82; }
+  .aba[aria-current="page"] .ico { background: rgba(255,255,255,.18); color: var(--surface); }
+  @media (max-width: 560px) {
+    .abas { grid-template-columns: 1fr 1fr; }
+    .aba { padding: 11px 12px; }
+    .aba .txt small { display: none; }
+  }
+
   /* subtítulo dentro do cartão, separando administradores de produtores */
   .sub-head {
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
@@ -633,6 +662,8 @@
 <div class="wrap" id="app" hidden>
 
   <div class="quem" id="quem" hidden></div>
+
+  <nav class="abas" id="abasProd" hidden aria-label="O que você quer fazer"></nav>
 
   <section id="painelCard" hidden>
     <div class="sec-head" style="margin-bottom:18px">
@@ -3061,10 +3092,10 @@
 
      O produtor continua sem lateral: a tela dele é uma só.               */
 
-  var SECOES = [
+  var SECOES_ADM = [
     { id: "painel",      ico: "◈", nome: "Painel",      sub: "Visão geral",
       cards: ["painelCard"] },
-    { id: "produtores",  ico: "☰", nome: "Produtores",  sub: "Acessos e convites",
+    { id: "produtores",  ico: "☰", nome: "Usuários",    sub: "Acessos e convites",
       cards: ["adminCard"] },
     { id: "lancamentos", ico: "✎", nome: "Lançamentos", sub: "Produção e gastos",
       cards: ["welcomeCard", "lancarCard", "gastosCard"], topo: true },
@@ -3074,12 +3105,33 @@
       cards: ["settings", "ligarCard"] }
   ];
 
+  /* O produtor tem três tarefas, e antes as três vinham empilhadas numa
+     coluna só — ele rolava a tela inteira para achar os gastos. Agora são
+     abas grandes no topo, feitas para o dedo, com o mesmo mecanismo do
+     painel do administrador. Ajustes entra como quarta aba porque é onde
+     ficam o preço do litro e o botão de ligar ao servidor.               */
+
+  var SECOES_PROD = [
+    { id: "lancamentos", ico: "✎", nome: "Lançar produção", sub: "Litros do dia",
+      cards: ["welcomeCard", "lancarCard"], topo: true },
+    { id: "racao",       ico: "◔", nome: "Gastos com ração", sub: "Compras do período",
+      cards: ["gastosCard"], topo: true },
+    { id: "relatorios",  ico: "▤", nome: "Relatórios",       sub: "Quinzena e histórico",
+      cards: ["resumoCard", "diaCard", "relatorioCard", "historicoCard"], topo: true },
+    { id: "ajustes",     ico: "⚙", nome: "Ajustes",          sub: "Preço, meta e dados",
+      cards: ["settings", "ligarCard"] }
+  ];
+
   var TEMA = "controle-leite.tema.v1";
   var secaoAtual = "painel";
 
   function ehPainelAdm() { return !!(contas && contas.papel === "admin"); }
+  function ehAbasProd() { return !!(contas && contas.papel === "produtor"); }
+  function secoes() { return ehPainelAdm() ? SECOES_ADM : SECOES_PROD; }
 
   function montarLateral() {
+    document.getElementById("abasProd").hidden = !ehAbasProd();
+    if (ehAbasProd()) { montarAbasProdutor(); return; }
     if (!ehPainelAdm()) {
       document.body.classList.remove("painel-adm");
       document.getElementById("side").hidden = true;
@@ -3089,7 +3141,7 @@
     document.getElementById("side").hidden = false;
 
     var menu = document.getElementById("sideMenu");
-    menu.innerHTML = '<div class="rotulo">Menu</div>' + SECOES.map(function (s) {
+    menu.innerHTML = '<div class="rotulo">Menu</div>' + SECOES_ADM.map(function (s) {
       return '<button class="side-item" type="button" data-secao="' + s.id + '">' +
         '<span class="ico">' + s.ico + "</span>" +
         '<span class="txt"><b>' + escapeHtml(s.nome) + "</b><small>" + escapeHtml(s.sub) + "</small></span>" +
@@ -3108,6 +3160,26 @@
     aplicarSecao();
   }
 
+  // abas grandes do produtor: as três ferramentas dele, mais os ajustes
+  function montarAbasProdutor() {
+    var el = document.getElementById("abasProd");
+    el.innerHTML = SECOES_PROD.map(function (s) {
+      return '<button class="aba" type="button" data-secao="' + s.id + '">' +
+        '<span class="ico">' + s.ico + "</span>" +
+        '<span class="txt"><b>' + escapeHtml(s.nome) + "</b><small>" + escapeHtml(s.sub) + "</small></span>" +
+      "</button>";
+    }).join("");
+    el.querySelectorAll("[data-secao]").forEach(function (b) {
+      b.addEventListener("click", function () { irParaSecao(this.getAttribute("data-secao")); });
+    });
+    if (!secaoAtualValida()) secaoAtual = SECOES_PROD[0].id;
+    aplicarSecao();
+  }
+
+  function secaoAtualValida() {
+    return secoes().some(function (s) { return s.id === secaoAtual; });
+  }
+
   function irParaSecao(id) {
     secaoAtual = id;
     aplicarSecao();
@@ -3116,12 +3188,13 @@
 
   // mostra os cartões da seção escolhida e esconde os das outras
   function aplicarSecao() {
-    if (!ehPainelAdm()) return;
+    if (!ehPainelAdm() && !ehAbasProd()) return;
+    var lista = secoes();
     var atual = null;
-    SECOES.forEach(function (s) { if (s.id === secaoAtual) atual = s; });
-    if (!atual) { atual = SECOES[0]; secaoAtual = atual.id; }
+    lista.forEach(function (s) { if (s.id === secaoAtual) atual = s; });
+    if (!atual) { atual = lista[0]; secaoAtual = atual.id; }
 
-    SECOES.forEach(function (s) {
+    lista.forEach(function (s) {
       s.cards.forEach(function (cid) {
         var el = document.getElementById(cid);
         if (!el) return;
@@ -3136,7 +3209,7 @@
     var topo = document.querySelector("header.top");
     if (topo) topo.hidden = !atual.topo;
 
-    document.querySelectorAll("#sideMenu [data-secao]").forEach(function (b) {
+    document.querySelectorAll("#sideMenu [data-secao], #abasProd [data-secao]").forEach(function (b) {
       if (b.getAttribute("data-secao") === atual.id) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
     });
