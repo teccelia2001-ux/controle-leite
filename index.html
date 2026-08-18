@@ -155,6 +155,14 @@
   .side-pe .eu .txt b { font-size: 13px; font-weight: 600; }
   .side-pe .eu .txt small { font-size: 11.5px; color: var(--muted); }
   .side-pe button { width: 100%; justify-content: flex-start; }
+  .side-sinc {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+    margin-bottom: 8px; padding: 9px 11px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--surface);
+  }
+  .side-sinc span { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .side-sinc small { font-size: 11px; color: var(--muted); }
+  .side-sinc[disabled] { opacity: .5; }
 
   /* cabeçalho de cada seção: bloco do ícone + título + subtítulo + ação */
   .sec-head {
@@ -650,6 +658,9 @@
     <div class="rotulo">Menu</div>
   </nav>
   <div class="side-pe">
+    <button class="side-sinc" id="sincLateral" type="button">
+      <span>⟳ Sincronizar</span><small id="sincEstadoLateral">—</small>
+    </button>
     <button class="btn-ghost" id="trocarTema" type="button">Tema claro</button>
     <div class="eu">
       <span class="av" id="euAvatar">—</span>
@@ -1987,6 +1998,9 @@
     estadoSync = txt;
     var el = document.getElementById("sincStatus");
     if (el) el.textContent = txt;
+    // o mesmo estado no pé da barra lateral do administrador
+    var lat = document.getElementById("sincEstadoLateral");
+    if (lat) lat.textContent = txt || "—";
   }
 
   /* ---------------- janela com campos ---------------- */
@@ -2509,6 +2523,14 @@
       return;
     }
     travarCampos(false);
+
+    /* No painel do administrador esta faixa era repetição: nome, papel,
+       sincronizar e sair já estão no pé da barra da esquerda. Ela continua
+       existindo para o produtor, que não tem barra lateral, e volta para o
+       administrador quando ele está só olhando os dados de um produtor —
+       nesse caso ela é a única saída do modo leitura.                     */
+    if (ehPainelAdm()) { el.hidden = true; el.innerHTML = ""; return; }
+
     el.innerHTML = '<span class="tag">' + (contas.papel === "admin" ? "Administrador" : "Produtor") + "</span>" +
       "<strong>" + escapeHtml(conta.nome) + "</strong>" +
       '<span>' + escapeHtml(conta.usuario) + "</span>" +
@@ -3157,6 +3179,12 @@
     document.getElementById("euAvatar").textContent = ini || "?";
     document.getElementById("euNome").textContent = eu.nome || "—";
     document.getElementById("euPapel").textContent = "Administrador";
+
+    // sincronizar só faz sentido com conta no servidor
+    var bs = document.getElementById("sincLateral");
+    bs.hidden = !(temServidor() && sessao);
+    document.getElementById("sincEstadoLateral").textContent = estadoSync || "—";
+
     aplicarSecao();
   }
 
@@ -4513,6 +4541,7 @@
     aplicarTema(claroAgora ? "escuro" : "claro");
   });
   document.getElementById("sairLateral").addEventListener("click", function () { sair(); });
+  document.getElementById("sincLateral").addEventListener("click", function () { sincronizar(); });
 
   aplicarTema(temaGuardado());
 
