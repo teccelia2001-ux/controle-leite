@@ -4351,10 +4351,18 @@
       "Serão apagados " + qtdLeite + " dia(s) de produção e " + qtdRacao + " compra(s) de ração. " +
       "Não dá para desfazer — se quiser guardar, cancele e use Salvar backup antes.",
       "Apagar tudo", true, function () {
+        /* Avisar o servidor é obrigatório: apagar só aqui limpava a tela e a
+           sincronização seguinte trazia tudo de volta do banco. Cada dia e
+           cada gasto entram na lista de exclusões, do mesmo jeito que o
+           apagar de um item só faz.                                        */
+        Object.keys(db.registros).forEach(function (k) { jogarNoLixo("registros", k); });
+        db.gastos.forEach(function (g) { if (g && g.id) jogarNoLixo("gastos", g.id); });
+
         db.registros = {};
         db.gastos = [];
         db.precos = {};
         save(); render();
+        agendarSync(300);
         msg("Todos os lançamentos foram apagados.", true);
         document.getElementById("settings").scrollIntoView({ behavior: "smooth", block: "center" });
       });
