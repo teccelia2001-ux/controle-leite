@@ -94,6 +94,123 @@
 
   .wrap { max-width: 1060px; margin: 0 auto; padding: 26px 20px 72px; display: flex; flex-direction: column; gap: 22px; }
 
+  /* ---------- painel do administrador ----------
+     Só o administrador ganha a barra lateral: o produtor tem uma tela só
+     (lançar a produção do dia) e menu ali seria estorvo. O <aside> nasce
+     escondido e a classe no <body> é que liga o layout de duas colunas. */
+
+  .side { display: none; }
+
+  body.painel-adm { margin: 0; }
+  body.painel-adm .side {
+    display: flex; flex-direction: column;
+    position: fixed; inset: 0 auto 0 0; width: 264px; z-index: 40;
+    background: var(--surface); border-right: 1px solid var(--line);
+  }
+  body.painel-adm .wrap { max-width: 1180px; margin-left: 264px; padding-top: 22px; }
+
+  .side-brand { padding: 20px 18px 16px; border-bottom: 1px solid var(--line-soft); }
+  .side-brand strong {
+    display: block; font-family: var(--serif); font-size: 19px; font-weight: 600;
+    color: var(--accent); letter-spacing: -.01em;
+  }
+  .side-brand span { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+  .side-menu { flex: 1 1 auto; overflow-y: auto; padding: 14px 12px; }
+  .side-menu .rotulo {
+    font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; padding: 4px 8px 10px;
+  }
+  .side-item {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    text-align: left; background: transparent; border: 1px solid transparent;
+    border-radius: 8px; padding: 9px 11px; margin-bottom: 4px; cursor: pointer;
+  }
+  .side-item:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+  .side-item .ico {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px;
+    display: grid; place-items: center; font-size: 15px;
+    background: var(--surface-2); color: var(--ink-2);
+  }
+  .side-item .txt { display: flex; flex-direction: column; min-width: 0; }
+  .side-item .txt b { font-size: 13.5px; font-weight: 600; line-height: 1.25; }
+  .side-item .txt small { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+  .side-item[aria-current="page"] {
+    background: var(--accent); border-color: var(--accent);
+  }
+  .side-item[aria-current="page"] .txt b,
+  .side-item[aria-current="page"] .txt small { color: var(--surface); }
+  .side-item[aria-current="page"] .txt small { opacity: .82; }
+  .side-item[aria-current="page"] .ico { background: rgba(255,255,255,.18); color: var(--surface); }
+
+  .side-pe { border-top: 1px solid var(--line-soft); padding: 12px; }
+  .side-pe .eu {
+    display: flex; align-items: center; gap: 10px; padding: 8px 6px 10px;
+  }
+  .side-pe .eu .av {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 13px;
+  }
+  .side-pe .eu .txt { display: flex; flex-direction: column; min-width: 0; }
+  .side-pe .eu .txt b { font-size: 13px; font-weight: 600; }
+  .side-pe .eu .txt small { font-size: 11.5px; color: var(--muted); }
+  .side-pe button { width: 100%; justify-content: flex-start; }
+
+  /* cabeçalho de cada seção: bloco do ícone + título + subtítulo + ação */
+  .sec-head {
+    display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+    padding-bottom: 14px; border-bottom: 2px solid var(--line);
+  }
+  .sec-head .ico {
+    flex: 0 0 auto; width: 46px; height: 46px; border-radius: 11px;
+    display: grid; place-items: center; font-size: 22px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .sec-head .tit { flex: 1 1 260px; min-width: 0; }
+  .sec-head h1 {
+    margin: 0; font-family: var(--serif); font-size: clamp(23px, 3.4vw, 31px);
+    font-weight: 600; letter-spacing: -.015em; color: var(--ink);
+  }
+  .sec-head p { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
+
+  /* cartões de números */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; box-shadow: var(--shadow);
+  }
+  .kpi .ico {
+    width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center;
+    font-size: 17px; background: var(--accent-soft); color: var(--accent); margin-bottom: 12px;
+  }
+  .kpi .num {
+    font-family: var(--serif); font-size: 30px; font-weight: 600;
+    letter-spacing: -.02em; line-height: 1; color: var(--ink);
+  }
+  .kpi .rot { margin-top: 5px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .kpi .sub { margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+  .kpi.dinheiro .ico { background: var(--money-soft); color: var(--money); }
+  .kpi.dinheiro .num { color: var(--money); }
+
+  /* no celular a lateral vira uma barra rolável no topo */
+  @media (max-width: 900px) {
+    body.painel-adm .side {
+      position: static; width: auto; flex-direction: row; align-items: center;
+      border-right: none; border-bottom: 1px solid var(--line); overflow-x: auto;
+    }
+    body.painel-adm .wrap { margin-left: auto; }
+    .side-brand { border-bottom: none; border-right: 1px solid var(--line-soft); padding: 12px 14px; }
+    .side-brand span { display: none; }
+    .side-menu { display: flex; gap: 6px; padding: 8px 10px; overflow-x: auto; }
+    .side-menu .rotulo { display: none; }
+    .side-item { margin: 0; white-space: nowrap; }
+    .side-item .txt small { display: none; }
+    .side-pe { border-top: none; border-left: 1px solid var(--line-soft); display: flex; gap: 8px; align-items: center; }
+    .side-pe .eu { padding: 0 4px; }
+    .side-pe .eu .txt { display: none; }
+    .side-pe button { width: auto; }
+  }
+
   /* ---------- cabeçalho ---------- */
 
   header.top {
@@ -444,9 +561,42 @@
   </div>
 </div>
 
+<aside class="side" id="side" hidden>
+  <div class="side-brand">
+    <strong>Controle de Leite</strong>
+    <span>Painel do administrador</span>
+  </div>
+  <nav class="side-menu" id="sideMenu" aria-label="Seções do painel">
+    <div class="rotulo">Menu</div>
+  </nav>
+  <div class="side-pe">
+    <button class="btn-ghost" id="trocarTema" type="button">Tema claro</button>
+    <div class="eu">
+      <span class="av" id="euAvatar">—</span>
+      <span class="txt"><b id="euNome">—</b><small id="euPapel">—</small></span>
+    </div>
+    <button class="btn-ghost" id="sairLateral" type="button">Sair da conta</button>
+  </div>
+</aside>
+
 <div class="wrap" id="app" hidden>
 
   <div class="quem" id="quem" hidden></div>
+
+  <section id="painelCard" hidden>
+    <div class="sec-head" style="margin-bottom:18px">
+      <span class="ico">◈</span>
+      <div class="tit">
+        <h1>Painel</h1>
+        <p>Visão geral da quinzena e dos produtores</p>
+      </div>
+    </div>
+    <div class="kpis" id="painelKpis"></div>
+    <div class="card" style="margin-top:18px">
+      <div class="card-head"><h2>Produtores por produção</h2><span class="hint">na quinzena atual</span></div>
+      <div class="card-body" id="painelTop"></div>
+    </div>
+  </section>
 
   <header class="top">
     <div class="brand">
@@ -479,7 +629,7 @@
     </div>
   </section>
 
-  <section class="card focus">
+  <section class="card focus" id="lancarCard">
     <div class="card-head">
       <h2 id="entryTitle">Lançar produção do dia</h2>
       <span class="hint">Litros totais do tanque, somando todas as ordenhas</span>
@@ -514,7 +664,7 @@
     <div class="missing" id="missing" hidden></div>
   </section>
 
-  <section class="card">
+  <section class="card" id="resumoCard">
     <div class="card-head">
       <h2 id="resumoTitle">Resumo da quinzena</h2>
       <span class="hint" id="resumoHint">—</span>
@@ -537,7 +687,7 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" id="diaCard">
     <div class="card-head">
       <h2>Dia a dia</h2>
       <span class="hint" id="tableHint">—</span>
@@ -545,7 +695,7 @@
     <div class="table-scroll" id="tableWrap"></div>
   </section>
 
-  <section class="card">
+  <section class="card" id="gastosCard">
     <div class="card-head">
       <h2>Gastos com ração</h2>
       <span class="hint">Lance cada compra na data em que foi feita</span>
@@ -578,7 +728,7 @@
     <div class="table-scroll" id="gastosWrap"></div>
   </section>
 
-  <section class="card print-only">
+  <section class="card print-only" id="relatorioCard">
     <div class="card-head">
       <h2>Relatório da quinzena</h2>
       <span class="hint">Texto pronto para enviar</span>
@@ -653,7 +803,7 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" id="historicoCard">
     <div class="card-head">
       <h2>Quinzenas anteriores</h2>
       <span class="hint">Clique para abrir uma quinzena</span>
@@ -2216,6 +2366,8 @@
     estadoSync = "";
     conta = null; leitura = false; db = vazio();
     document.body.classList.remove("leitura");
+    document.body.classList.remove("painel-adm");     // a lateral não fica sobre a tela de entrada
+    document.getElementById("side").hidden = true;
     gate("login");
   }
 
@@ -2348,6 +2500,9 @@
     db = normalizar(p.dados);
     document.body.classList.add("leitura");
     hydrate();
+    // os cartões de produção vivem na seção Lançamentos: sem isto o "Abrir"
+    // trocava os dados por trás e a tela parecia não fazer nada
+    if (ehPainelAdm()) secaoAtual = "lancamentos";
     render();
     document.getElementById("quem").scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -2832,6 +2987,156 @@
 
   /* ---------------- render ---------------- */
 
+  /* ---------------- painel do administrador ----------------
+     O administrador tem várias frentes (produtores, lançamentos, relatórios,
+     ajustes) e antes tudo vinha empilhado numa coluna só, obrigando a rolar
+     para achar. Aqui a mesma pilha é repartida em seções, e o menu da lateral
+     escolhe qual aparece. Nada de dado muda: são os cartões que já existiam.
+
+     O produtor continua sem lateral: a tela dele é uma só.               */
+
+  var SECOES = [
+    { id: "painel",      ico: "◈", nome: "Painel",      sub: "Visão geral",
+      cards: ["painelCard"] },
+    { id: "produtores",  ico: "☰", nome: "Produtores",  sub: "Acessos e convites",
+      cards: ["adminCard"] },
+    { id: "lancamentos", ico: "✎", nome: "Lançamentos", sub: "Produção e gastos",
+      cards: ["welcomeCard", "lancarCard", "resumoCard", "diaCard", "gastosCard"], topo: true },
+    { id: "relatorios",  ico: "▤", nome: "Relatórios",  sub: "Quinzena e histórico",
+      cards: ["relatorioCard", "historicoCard"], topo: true },
+    { id: "ajustes",     ico: "⚙", nome: "Ajustes",     sub: "Dados e backup",
+      cards: ["settings", "ligarCard", "envioCard"] }
+  ];
+
+  var TEMA = "controle-leite.tema.v1";
+  var secaoAtual = "painel";
+
+  function ehPainelAdm() { return !!(contas && contas.papel === "admin"); }
+
+  function montarLateral() {
+    if (!ehPainelAdm()) {
+      document.body.classList.remove("painel-adm");
+      document.getElementById("side").hidden = true;
+      return;
+    }
+    document.body.classList.add("painel-adm");
+    document.getElementById("side").hidden = false;
+
+    var menu = document.getElementById("sideMenu");
+    menu.innerHTML = '<div class="rotulo">Menu</div>' + SECOES.map(function (s) {
+      return '<button class="side-item" type="button" data-secao="' + s.id + '">' +
+        '<span class="ico">' + s.ico + "</span>" +
+        '<span class="txt"><b>' + escapeHtml(s.nome) + "</b><small>" + escapeHtml(s.sub) + "</small></span>" +
+      "</button>";
+    }).join("");
+    menu.querySelectorAll("[data-secao]").forEach(function (b) {
+      b.addEventListener("click", function () { irParaSecao(this.getAttribute("data-secao")); });
+    });
+
+    var eu = contas.eu || {};
+    var ini = String(eu.nome || "?").trim().split(/\s+/).slice(0, 2)
+      .map(function (x) { return x.charAt(0).toUpperCase(); }).join("");
+    document.getElementById("euAvatar").textContent = ini || "?";
+    document.getElementById("euNome").textContent = eu.nome || "—";
+    document.getElementById("euPapel").textContent = "Administrador";
+    aplicarSecao();
+  }
+
+  function irParaSecao(id) {
+    secaoAtual = id;
+    aplicarSecao();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // mostra os cartões da seção escolhida e esconde os das outras
+  function aplicarSecao() {
+    if (!ehPainelAdm()) return;
+    var atual = null;
+    SECOES.forEach(function (s) { if (s.id === secaoAtual) atual = s; });
+    if (!atual) { atual = SECOES[0]; secaoAtual = atual.id; }
+
+    SECOES.forEach(function (s) {
+      s.cards.forEach(function (cid) {
+        var el = document.getElementById(cid);
+        if (!el) return;
+        if (s.id !== atual.id) { el.hidden = true; return; }
+        // dentro da seção escolhida, cada cartão mantém a própria regra
+        if (cid === "welcomeCard") el.hidden = totalGeral() > 0;
+        else if (cid === "envioCard") el.hidden = contas.papel !== "produtor";
+        else if (cid === "ligarCard") el.hidden = !(temServidor() && !sessao && contas.papel === "produtor");
+        else el.hidden = false;
+      });
+    });
+
+    var topo = document.querySelector("header.top");
+    if (topo) topo.hidden = !atual.topo;
+
+    document.querySelectorAll("#sideMenu [data-secao]").forEach(function (b) {
+      if (b.getAttribute("data-secao") === atual.id) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
+
+    if (atual.id === "painel") renderPainel();
+  }
+
+  function renderPainel() {
+    var lista = (contas && contas.produtores) || [];
+    var meu = stats(view);
+    var litros = meu.total, sobra = meu.sobra || 0, gasto = meu.gastoTotal, comDados = 0;
+    var linhas = [{ nome: (contas.eu && contas.eu.nome) || "Eu", litros: meu.total, sobra: meu.sobra, eu: true }];
+
+    lista.forEach(function (p) {
+      var s = p.dados ? statsDe(p) : null;
+      if (!s) { linhas.push({ nome: p.nome, litros: null, sobra: null }); return; }
+      comDados++;
+      litros += s.total; gasto += s.gastoTotal;
+      if (s.sobra !== null) sobra += s.sobra;
+      linhas.push({ nome: p.nome, litros: s.total, sobra: s.sobra });
+    });
+
+    function kpi(classe, ico, num, rot, sub) {
+      return '<div class="kpi ' + classe + '"><div class="ico">' + ico + "</div>" +
+        '<div class="num">' + num + '</div><div class="rot">' + rot + "</div>" +
+        '<div class="sub">' + sub + "</div></div>";
+    }
+    document.getElementById("painelKpis").innerHTML =
+      kpi("", "☰", lista.length, "Produtores", comDados + " com produção enviada") +
+      kpi("", "◍", nL(litros, 0) + " L", "Litros na quinzena", periodName(view)) +
+      kpi("dinheiro", "◎", nBRL(sobra), "Sobra somada", "receita menos ração") +
+      kpi("", "◔", nBRL(gasto), "Gasto com ração", "na quinzena");
+
+    linhas.sort(function (a, b) { return (b.litros || 0) - (a.litros || 0); });
+    var maior = linhas.reduce(function (m, l) { return Math.max(m, l.litros || 0); }, 0);
+    // sem produtores, a linha de quem está logado continua valendo: mostra
+    // ela e um empurrão para cadastrar, em vez de esconder tudo
+    document.getElementById("painelTop").innerHTML =
+      (!lista.length ? '<div class="empty-state" style="margin-bottom:12px">Nenhum produtor cadastrado ainda — ' +
+        'crie o primeiro acesso em <b>Produtores</b>.</div>' : "") +
+      linhas.map(function (l) {
+          var pct = maior ? Math.round((l.litros || 0) / maior * 100) : 0;
+          return '<div class="prod-row" style="grid-template-columns:1fr auto">' +
+            '<div class="prod-nome">' + escapeHtml(l.nome) + (l.eu ? " <small>(você)</small>" : "") +
+              '<span><span style="display:inline-block;height:5px;border-radius:3px;background:var(--accent);width:' +
+              Math.max(pct, 2) + '%;min-width:6px"></span></span></div>' +
+            '<div class="prod-num">' + (l.litros === null ? "—" : nL(l.litros, 0) + " L") +
+              "<small>" + (l.sobra === null || l.sobra === undefined ? "sem preço" : nBRL(l.sobra)) + "</small></div>" +
+          "</div>";
+        }).join("");
+  }
+
+  function aplicarTema(t) {
+    var raiz = document.documentElement;
+    if (t === "claro" || t === "escuro") raiz.setAttribute("data-theme", t === "claro" ? "light" : "dark");
+    else raiz.removeAttribute("data-theme");
+    var b = document.getElementById("trocarTema");
+    if (b) b.textContent = t === "claro" ? "Tema escuro" : "Tema claro";
+    try { if (t) localStorage.setItem(TEMA, t); else localStorage.removeItem(TEMA); } catch (e) {}
+  }
+
+  function temaGuardado() {
+    try { return localStorage.getItem(TEMA); } catch (e) { return null; }
+  }
+
   function render() {
     var s = stats(view);
     var sAnt = stats(shiftPeriod(view, -1));
@@ -2853,6 +3158,7 @@
     renderQuem();
     renderProdutores();
     syncEntry();
+    aplicarSecao();   // por último: manda na visibilidade dos cartões
   }
 
   function renderKpis(s, sAnt) {
@@ -4009,10 +4315,22 @@
     document.getElementById("fData").value = hojeIso();
     document.getElementById("gData").value = hojeIso();
     document.getElementById("fVacas").value = db.config.ultimasVacas || "";
+    montarLateral();
     hydrate();
     render();
     if (!totalGeral()) document.getElementById("settings").open = false;
+    if (ehPainelAdm()) document.getElementById("settings").open = true;
   }
+
+  document.getElementById("trocarTema").addEventListener("click", function () {
+    var claroAgora = document.documentElement.getAttribute("data-theme") === "light" ||
+      (!document.documentElement.getAttribute("data-theme") &&
+        !window.matchMedia("(prefers-color-scheme: dark)").matches);
+    aplicarTema(claroAgora ? "escuro" : "claro");
+  });
+  document.getElementById("sairLateral").addEventListener("click", function () { sair(); });
+
+  aplicarTema(temaGuardado());
 
   var noLink = conviteDoEndereco();
 
