@@ -859,21 +859,17 @@
         </div>
       </div>
       <div class="tools">
-        <button id="exportJson">Salvar backup</button>
-        <button id="copyJson">Copiar backup</button>
-        <button id="importBtn">Restaurar backup</button>
+        <span id="grupoBackup" class="tools" style="gap:8px">
+          <button id="exportJson">Salvar backup</button>
+          <button id="copyJson">Copiar backup</button>
+          <button id="importBtn">Restaurar backup</button>
+        </span>
         <button id="exportCsv">Exportar para Excel (CSV)</button>
         <input type="file" id="importFile" accept="application/json,.json" hidden />
         <button id="demoBtn" class="btn-ghost">Carregar exemplo</button>
         <button id="wipeBtn">Apagar tudo</button>
       </div>
-      <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:62ch">
-        Os lançamentos ficam guardados neste aparelho. Vale salvar o backup uma vez por mês.
-        <br /><strong style="color:var(--ink-2)">Passar para outro celular:</strong>
-        toque em <strong style="color:var(--ink-2)">Copiar backup</strong>, cole numa mensagem de WhatsApp
-        para você mesmo e, no outro celular, abra esta mesma página e use
-        <strong style="color:var(--ink-2)">Restaurar backup › Colar texto</strong>.
-      </p>
+      <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:62ch" id="textoDados">—</p>
     </div>
   </details>
 
@@ -3152,6 +3148,37 @@
      nos totais dos produtores. Se ele também lança (é comum ter a própria
      vaca), isso aparece num cartão separado, "Sua produção".            */
 
+  /* ---------------- backup: só faz sentido sem servidor ----------------
+     Com a conta ligada ao Supabase, os lançamentos já estão guardados fora
+     do aparelho e replicados a cada sincronização — pedir backup manual aí
+     é trabalho inútil e ainda sugere que o dado corre risco. Sem servidor
+     (ou sem sessão), o backup volta a ser a única rede de proteção, então
+     os botões reaparecem.
+
+     Exportar CSV continua sempre: serve para levar ao Excel, não para
+     proteger o dado.                                                     */
+
+  function renderDados() {
+    var noServidor = !!(temServidor() && sessao);
+    var grupo = document.getElementById("grupoBackup");
+    var texto = document.getElementById("textoDados");
+    if (!grupo || !texto) return;
+
+    grupo.hidden = noServidor;
+    if (noServidor) {
+      texto.innerHTML = "Os lançamentos ficam guardados no servidor, e não só neste aparelho — " +
+        "não precisa fazer backup. Entrando com o seu usuário e senha em outro celular, " +
+        "tudo aparece lá.";
+      return;
+    }
+    texto.innerHTML = "Este acesso ainda não está ligado ao servidor, então os lançamentos " +
+      "ficam só neste aparelho. Vale salvar o backup uma vez por mês." +
+      '<br /><strong style="color:var(--ink-2)">Passar para outro celular:</strong> ' +
+      'toque em <strong style="color:var(--ink-2)">Copiar backup</strong>, cole numa mensagem de ' +
+      'WhatsApp para você mesmo e, no outro celular, abra esta mesma página e use ' +
+      '<strong style="color:var(--ink-2)">Restaurar backup › Colar texto</strong>.';
+  }
+
   function renderPainel() {
     var lista = (contas && contas.produtores) || [];
     var meu = stats(view);
@@ -3236,6 +3263,7 @@
     renderMissing();
     renderQuem();
     renderProdutores();
+    renderDados();
     syncEntry();
     aplicarSecao();   // por último: manda na visibilidade dos cartões
   }
