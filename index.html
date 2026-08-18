@@ -831,6 +831,38 @@
   // de um toque. Dentro do artifact isso nunca chega — a moldura não repassa
   // o endereço —, mas funciona na hora se a página estiver hospedada num
   // endereço próprio.
+  /* ---------------- qual link foi usado para chegar aqui ----------------
+     São dois endereços para o mesmo sistema: `?quem=admin` mostra o caminho
+     do administrador, `?quem=produtor` mostra o do produtor. Serve para o
+     produtor não topar com "Criar acesso de administrador" e criar conta de
+     dono por engano.
+
+     Guardamos a escolha neste aparelho porque o atalho instalado abre em
+     `start_url` — sem o `?quem=` do link original. Sem isso, a separação
+     valeria só na primeira visita.
+
+     Atenção ao que isto NÃO é: o endereço é adivinhável, então isto organiza
+     a entrada, não tranca porta. Quem digitar o outro endereço vê o outro
+     caminho.                                                              */
+
+  var QUEM = "controle-leite.quem.v1";
+
+  function quemChegou() {
+    var t = (String(location.search || "") + " " + String(location.hash || "")).toLowerCase();
+    var achado = null;
+    if (t.indexOf("quem=admin") >= 0) achado = "admin";
+    else if (t.indexOf("quem=produtor") >= 0) achado = "produtor";
+    if (achado) {
+      try { localStorage.setItem(QUEM, achado); } catch (e) {}
+      return achado;
+    }
+    try { return localStorage.getItem(QUEM) || null; } catch (e) { return null; }
+  }
+
+  function esquecerQuem() {
+    try { localStorage.removeItem(QUEM); } catch (e) {}
+  }
+
   function conviteDoEndereco() {
     var t = String(location.hash || "") + " " + String(location.search || "");
     if (t.indexOf("CONVITE") < 0 && t.indexOf("ADMIN") < 0) return null;
@@ -1856,20 +1888,40 @@
     var corpo = document.getElementById("gateBody");
 
     if (estado === "inicio") {
+      var quem = gate.mostrarTudo ? null : quemChegou();
+      var ehAdmin = quem === "admin", ehProdutor = quem === "produtor";
+
       tit.textContent = "Entrar";
-      sub.textContent = temServidor()
-        ? "Se você já tem usuário e senha, entre direto — vale em qualquer aparelho."
-        : "Este aparelho ainda não tem acesso.";
-      corpo.innerHTML =
-        '<div class="gate-form">' +
-          (temServidor() ? '<button class="btn-primary" data-ir="servidor">Já tenho usuário e senha</button>' : "") +
-          '<button' + (temServidor() ? "" : ' class="btn-primary"') + ' data-ir="admin-novo">Criar acesso de administrador</button>' +
-          '<button data-ir="convite">Recebi um código de convite</button>' +
-        "</div>";
+      sub.textContent = ehProdutor
+        ? "Use o usuário e a senha que o administrador te passou, ou o código de convite."
+        : (temServidor()
+            ? "Se você já tem usuário e senha, entre direto — vale em qualquer aparelho."
+            : "Este aparelho ainda não tem acesso.");
+
+      var botoes = "";
+      if (temServidor()) botoes += '<button class="btn-primary" data-ir="servidor">Já tenho usuário e senha</button>';
+      // o caminho de criar dono não aparece no link do produtor
+      if (!ehProdutor) {
+        botoes += '<button' + (temServidor() ? "" : ' class="btn-primary"') +
+                  ' data-ir="admin-novo">Criar acesso de administrador</button>';
+      }
+      // o link do administrador não precisa oferecer o caminho de convite
+      if (!ehAdmin) botoes += '<button data-ir="convite">Recebi um código de convite</button>';
+
+      corpo.innerHTML = '<div class="gate-form">' + botoes + "</div>" +
+        // saída de emergência: ninguém fica preso no caminho errado
+        (quem ? '<div class="gate-alt"><button data-tudo>Ver todas as opções</button></div>' : "");
+
       var bs = corpo.querySelector('[data-ir="servidor"]');
       if (bs) bs.addEventListener("click", function () { gate("servidor"); });
-      corpo.querySelector('[data-ir="admin-novo"]').addEventListener("click", function () { gate("admin-novo"); });
-      corpo.querySelector('[data-ir="convite"]').addEventListener("click", function () { gate("convite"); });
+      var ba = corpo.querySelector('[data-ir="admin-novo"]');
+      if (ba) ba.addEventListener("click", function () { gate("admin-novo"); });
+      var bc = corpo.querySelector('[data-ir="convite"]');
+      if (bc) bc.addEventListener("click", function () { gate("convite"); });
+      var bt = corpo.querySelector("[data-tudo]");
+      if (bt) bt.addEventListener("click", function () {
+        gate.mostrarTudo = true; esquecerQuem(); gate("inicio");
+      });
       return;
     }
 
