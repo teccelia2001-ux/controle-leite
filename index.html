@@ -175,13 +175,21 @@
 
   /* subtítulo dentro do cartão, separando administradores de produtores */
   .sub-head {
-    display: flex; align-items: center; gap: 8px;
-    padding: 14px 18px 8px; font-size: 11px; font-weight: 700;
-    letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-top: 6px; padding: 12px 18px 10px;
+    font-size: 11.5px; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+    background: var(--accent-soft); border-top: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
   }
-  .sub-head span {
-    font-size: 11px; letter-spacing: 0; padding: 1px 7px; border-radius: 10px;
-    background: var(--surface-2); color: var(--ink-2);
+  .sub-head .marca { width: 3px; height: 15px; border-radius: 2px; background: var(--accent); }
+  .sub-head .conta {
+    font-size: 11px; letter-spacing: 0; padding: 1px 8px; border-radius: 10px;
+    background: var(--surface); color: var(--accent); border: 1px solid var(--line);
+  }
+  .sub-head .defin {
+    flex: 1 1 240px; font-style: normal; font-weight: 500; font-size: 12px;
+    letter-spacing: 0; text-transform: none; color: var(--muted);
   }
   .av-mini {
     width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
@@ -793,7 +801,7 @@
 
   <section class="card" id="adminCard" hidden>
     <div class="card-head">
-      <h2>Produtores</h2>
+      <h2>Usuários</h2>
       <span class="hint" id="adminHint">—</span>
     </div>
     <div class="missing" id="avisoServidor" hidden></div>
@@ -802,15 +810,12 @@
     <div class="card-body">
       <div class="tools">
         <button id="novoProdutor" class="btn-primary">+ Novo usuário</button>
-        <button id="receberDados">Receber dados de um produtor</button>
-        <button id="meuAcesso">Entrar em outro aparelho</button>
         <button id="minhaSenha">Mudar minha senha</button>
         <button id="limparProdutores">Remover todos</button>
       </div>
       <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
-        Cada produtor lança no celular dele. Você cria o acesso, manda o código de convite,
-        e quando ele tocar em <strong style="color:var(--ink-2)">Enviar ao administrador</strong>
-        você cola o código aqui para ver a produção dele.
+        Cada produtor entra com o usuário e a senha que você definir e lança no celular dele.
+        A produção chega sozinha aqui, pelo servidor — não precisa mandar nem colar código.
       </p>
     </div>
   </section>
@@ -829,21 +834,6 @@
       <div class="tools">
         <button id="ligarServidor" class="btn-primary">Ligar ao servidor</button>
       </div>
-    </div>
-  </section>
-
-  <section class="card" id="envioCard" hidden>
-    <div class="card-head">
-      <h2>Mandar para o administrador</h2>
-      <span class="hint">Gera um código para você colar no WhatsApp</span>
-    </div>
-    <div class="card-body">
-      <div class="tools">
-        <button id="enviarAdmin" class="btn-primary">Enviar ao administrador</button>
-      </div>
-      <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
-        O código leva todos os seus lançamentos e gastos. Mande sempre que fechar uma quinzena.
-      </p>
     </div>
   </section>
 
@@ -2547,12 +2537,18 @@
           "<span>" + escapeHtml(usuario) + "</span></div>" +
         '<div><span class="etiqueta">' + etiqueta + "</span></div></div>";
     }
+    function titulo(nome, quantos, definicao) {
+      return '<div class="sub-head"><span class="marca"></span>' + nome +
+        ' <span class="conta">' + quantos + "</span>" +
+        '<em class="defin">' + definicao + "</em></div>";
+    }
     el.innerHTML =
-      '<div class="sub-head">Administradores <span>' + (lista.length + 1) + "</span></div>" +
+      titulo("Administradores", lista.length + 1,
+             "acompanham a produção de todos e cadastram novos usuários") +
       linha(eu.nome, eu.usuario, "Administrador", true) +
       lista.map(function (a) { return linha(a.nome, a.usuario, "Administrador", false); }).join("") +
-      '<div class="sub-head" style="margin-top:16px">Produtores <span>' +
-        ((contas && contas.produtores.length) || 0) + "</span></div>";
+      titulo("Produtores", (contas && contas.produtores.length) || 0,
+             "lançam a produção no celular deles; não veem os dados dos outros");
   }
 
   function renderProdutores() {
@@ -2848,42 +2844,6 @@
     });
   }
 
-  function receberDados() {
-    janelaTexto({
-      titulo: "Receber dados de um produtor",
-      detalhe: "Cole o código que o produtor mandou.",
-      valor: "", leitura: false, textoOk: "Receber",
-      aoConfirmar: function (valor, btn) {
-        var c = decodificar(valor);
-        if (!c || c.tipo !== "ENVIO" || !c.corpo || !c.corpo.id) { btn.textContent = "Código inválido"; return false; }
-        var p = acharProdutor(c.corpo.id);
-        if (!p) { btn.textContent = "Produtor não é da sua lista"; return false; }
-        p.dados = normalizar(c.corpo.db);
-        p.recebido = c.corpo.quando || hojeIso();
-        marcarLivresSujo();
-        salvarContas();
-        renderProdutores();
-        avisar("Dados recebidos", "Chegaram os lançamentos de " + p.nome + ". Toque em Abrir para ver.");
-        return true;
-      }
-    });
-  }
-
-  /* ---------------- administrador em outro aparelho ----------------
-     O acesso do administrador também mora só neste aparelho. Este link
-     instala a conta dele no aparelho novo — e, se ele quiser, leva
-     junto a lista de produtores e o que já foi recebido. Depois disso,
-     aquele aparelho pede só usuário e senha.                          */
-
-  function meuAcessoAdmin() {
-    perguntar("Entrar em outro aparelho",
-      "Levar só o acesso deixa o link curto e sem nenhum dado dentro. " +
-      "Levar tudo carrega no link a sua lista de produtores e a produção que eles já mandaram — " +
-      "quem receber esse link vê esses dados, então mande só para você mesmo.",
-      "Levar tudo", false, function () { gerarAcessoAdmin(true); },
-      "Só o acesso", function () { gerarAcessoAdmin(false); });
-  }
-
   /* ---------------- trocar a própria senha ----------------
      A senha do administrador mora em dois lugares: o hash guardado neste
      aparelho (que faz o login funcionar sem sinal) e a senha da conta no
@@ -2943,63 +2903,6 @@
     });
   }
 
-  function gerarAcessoAdmin(completo) {
-    var corpo = {
-      id: conta.id, nome: conta.nome, usuario: conta.usuario, senha: conta.senha
-    };
-    if (completo) {
-      corpo.produtores = contas.produtores;
-      corpo.db = db;
-    }
-    var cod = codificar("ADMIN", corpo);
-    var porLink = !dentroDaMoldura();
-    var link = porLink ? linkConvite(cod) : null;
-
-    // link gigante trava em alguns aplicativos de mensagem
-    if (porLink && link.length > 8000) {
-      perguntar("Ficou grande demais para um link",
-        "São " + Math.round(link.length / 1000) + " mil caracteres, e aplicativo de mensagem costuma cortar. " +
-        "Melhor levar só o acesso pelo link e passar os dados pelo backup (Copiar backup aqui, Restaurar lá).",
-        "Levar só o acesso", false, function () { gerarAcessoAdmin(false); });
-      return;
-    }
-
-    var recado = "Acesso de administrador — " + conta.nome + "\n" +
-      "Usuário: " + conta.usuario + "\n" +
-      (completo ? "Leva junto: " + contas.produtores.length + " produtor(es) e os seus lançamentos\n" : "") +
-      "\n" + (porLink
-        ? "Abra este link no outro aparelho:\n\n" + link
-        : "Cole este código na tela de convite do outro aparelho:\n\n" + cod);
-
-    var over = document.createElement("div");
-    over.className = "overlay";
-    over.innerHTML =
-      '<div class="modal" role="dialog" aria-modal="true">' +
-        "<h3>Seu acesso em outro aparelho</h3>" +
-        "<p>Mande isto <strong>só para você mesmo</strong>. No aparelho novo, " +
-        (porLink ? "toque no link" : "cole o código") +
-        " e entre com a sua senha de sempre — ela não vai escrita aqui.</p>" +
-        '<div class="codigo">' + escapeHtml(recado) + "</div>" +
-        '<div class="acoes">' +
-          '<button type="button" data-no>Fechar</button>' +
-          '<button type="button" data-copy class="btn-primary">Copiar</button>' +
-        "</div></div>";
-    document.body.appendChild(over);
-
-    function fechar() { if (over.parentNode) over.parentNode.removeChild(over); }
-    over.querySelector("[data-no]").addEventListener("click", fechar);
-    over.querySelector("[data-copy]").addEventListener("click", function () {
-      var b = this;
-      copiarTexto(recado, function () {
-        b.textContent = "Copiado";
-        setTimeout(fechar, 1000);
-      }, function () {
-        fechar();
-        janelaTexto({ titulo: "Copie na mão", valor: recado, leitura: true, textoOk: "Pronto" });
-      });
-    });
-  }
-
   // instala o acesso de administrador que veio pelo link ou pelo código
   function aplicarAcessoAdmin(c) {
     function gravar() {
@@ -3026,25 +2929,6 @@
       return;
     }
     gravar();
-  }
-
-  function enviarAoAdmin() {
-    if (!totalGeral() && !db.gastos.length) {
-      avisar("Nada para enviar", "Lance ao menos um dia de produção antes.");
-      return;
-    }
-    var cod = codificar("ENVIO", { id: conta.id, nome: conta.nome, quando: hojeIso(), db: db });
-    var recado = "Produção de " + conta.nome + " até " + diaCurto(hojeIso()) + "\n\n" + cod;
-    copiarTexto(recado, function () {
-      avisar("Código copiado", "Agora é só colar numa mensagem para o administrador. " +
-        "Ele cola em “Receber dados de um produtor” e vê tudo.");
-    }, function () {
-      janelaTexto({
-        titulo: "Copie e mande para o administrador",
-        detalhe: "Segure o dedo no texto, selecione tudo e copie.",
-        valor: recado, leitura: true, textoOk: "Pronto"
-      });
-    });
   }
 
   /* ---------------- datas ---------------- */
@@ -3187,11 +3071,11 @@
     { id: "produtores",  ico: "☰", nome: "Produtores",  sub: "Acessos e convites",
       cards: ["adminCard"] },
     { id: "lancamentos", ico: "✎", nome: "Lançamentos", sub: "Produção e gastos",
-      cards: ["welcomeCard", "lancarCard", "resumoCard", "diaCard", "gastosCard"], topo: true },
+      cards: ["welcomeCard", "lancarCard", "gastosCard"], topo: true },
     { id: "relatorios",  ico: "▤", nome: "Relatórios",  sub: "Quinzena e histórico",
-      cards: ["relatorioCard", "historicoCard"], topo: true },
+      cards: ["resumoCard", "diaCard", "relatorioCard", "historicoCard"], topo: true },
     { id: "ajustes",     ico: "⚙", nome: "Ajustes",     sub: "Dados e backup",
-      cards: ["settings", "ligarCard", "envioCard"] }
+      cards: ["settings", "ligarCard"] }
   ];
 
   var TEMA = "controle-leite.tema.v1";
@@ -3248,7 +3132,6 @@
         if (s.id !== atual.id) { el.hidden = true; return; }
         // dentro da seção escolhida, cada cartão mantém a própria regra
         if (cid === "welcomeCard") el.hidden = totalGeral() > 0;
-        else if (cid === "envioCard") el.hidden = contas.papel !== "produtor";
         else if (cid === "ligarCard") el.hidden = !(temServidor() && !sessao && contas.papel === "produtor");
         else el.hidden = false;
       });
@@ -4385,8 +4268,6 @@
   }
 
   document.getElementById("novoProdutor").addEventListener("click", novoUsuario);
-  document.getElementById("receberDados").addEventListener("click", receberDados);
-  document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
   document.getElementById("minhaSenha").addEventListener("click", mudarMinhaSenha);
   document.getElementById("limparProdutores").addEventListener("click", removerTodosProdutores);
 
@@ -4499,14 +4380,12 @@
       }
     });
   });
-  document.getElementById("enviarAdmin").addEventListener("click", enviarAoAdmin);
 
   function iniciarApp() {
     document.getElementById("gate").hidden = true;
     document.getElementById("gateBody").innerHTML = "";   // some com os campos da entrada
     document.getElementById("app").hidden = false;
     document.getElementById("adminCard").hidden = contas.papel !== "admin";
-    document.getElementById("envioCard").hidden = contas.papel !== "produtor";
     document.getElementById("ligarCard").hidden = !(temServidor() && !sessao && contas.papel === "produtor");
     document.getElementById("fData").value = hojeIso();
     document.getElementById("gData").value = hojeIso();
