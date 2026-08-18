@@ -847,16 +847,25 @@
 
   var QUEM = "controle-leite.quem.v1";
 
-  function quemChegou() {
+  // só o que veio no endereço agora, sem olhar o que este aparelho guardou
+  function quemNoEndereco() {
     var t = (String(location.search || "") + " " + String(location.hash || "")).toLowerCase();
-    var achado = null;
-    if (t.indexOf("quem=admin") >= 0) achado = "admin";
-    else if (t.indexOf("quem=produtor") >= 0) achado = "produtor";
+    if (t.indexOf("quem=admin") >= 0) return "admin";
+    if (t.indexOf("quem=produtor") >= 0) return "produtor";
+    return null;
+  }
+
+  function quemChegou() {
+    var achado = quemNoEndereco();
     if (achado) {
       try { localStorage.setItem(QUEM, achado); } catch (e) {}
       return achado;
     }
     try { return localStorage.getItem(QUEM) || null; } catch (e) { return null; }
+  }
+
+  function lembrarQuem(papel) {
+    try { if (papel) localStorage.setItem(QUEM, papel); } catch (e) {}
   }
 
   function esquecerQuem() {
@@ -1899,10 +1908,20 @@
             : "Este aparelho ainda não tem acesso.");
 
       var botoes = "";
-      if (temServidor()) botoes += '<button class="btn-primary" data-ir="servidor">Já tenho usuário e senha</button>';
+      // aparelho que já tem acesso guardado: oferece voltar para ele, para
+      // quem abriu o link do outro papel sem querer não ficar perdido
+      var jaTem = contas && contas.eu;
+      if (jaTem) {
+        sub.textContent = "Este aparelho está com o acesso de " + contas.eu.nome +
+          " (" + (contas.papel === "admin" ? "administrador" : "produtor") + ").";
+        botoes += '<button class="btn-primary" data-voltar-conta>Continuar como ' +
+                  escapeHtml(contas.eu.nome) + "</button>";
+      }
+      if (temServidor()) botoes += '<button' + (jaTem ? "" : ' class="btn-primary"') +
+                                   ' data-ir="servidor">Já tenho usuário e senha</button>';
       // o caminho de criar dono não aparece no link do produtor
       if (!ehProdutor) {
-        botoes += '<button' + (temServidor() ? "" : ' class="btn-primary"') +
+        botoes += '<button' + (temServidor() || jaTem ? "" : ' class="btn-primary"') +
                   ' data-ir="admin-novo">Criar acesso de administrador</button>';
       }
       // o link do administrador não precisa oferecer o caminho de convite
@@ -1921,6 +1940,12 @@
       var bt = corpo.querySelector("[data-tudo]");
       if (bt) bt.addEventListener("click", function () {
         gate.mostrarTudo = true; esquecerQuem(); gate("inicio");
+      });
+      var bv = corpo.querySelector("[data-voltar-conta]");
+      if (bv) bv.addEventListener("click", function () {
+        lembrarQuem(contas.papel);           // desfaz o "quem" que o link trouxe
+        if (contas.sessao && contas.sessao === contas.eu.id) { entrar(contas.eu); agendarSync(400); }
+        else gate("login");
       });
       return;
     }
@@ -3990,12 +4015,24 @@
   }
 
   var noLink = conviteDoEndereco();
+
+  /* Abrir o link do outro papel neste aparelho não pode cair direto no app.
+     Era o que acontecia: quem já estava logado como administrador e abria o
+     link do produtor entrava no painel do administrador, porque a tela de
+     escolha só aparece quando não há conta guardada. Agora, quando o
+     endereço traz um `?quem=` diferente do papel deste aparelho, paramos na
+     tela de escolha — com o botão "Continuar como <nome>" para quem abriu
+     sem querer.                                                            */
+  var quemVeio = quemNoEndereco();
+  var linkDeOutroPapel = !noLink && quemVeio && contas && contas.papel && contas.papel !== quemVeio;
+
   if (noLink) {
     if (!contas) gate("inicio");     // deixa uma tela por trás, o link manda
     if (noLink.tipo === "ADMIN") aplicarAcessoAdmin(noLink.corpo);
     else aplicarConvite(noLink.corpo);
   }
   else if (!contas) gate("inicio");
+  else if (linkDeOutroPapel) gate("inicio");
   else if (contas.sessao && contas.sessao === contas.eu.id) { entrar(contas.eu); agendarSync(400); }
   else gate("login");
 
