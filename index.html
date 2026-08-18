@@ -1939,6 +1939,7 @@
         salvarContas();
 
         // e os produtores sem login, que viajam junto com a conta do admin
+        renderProdutores();   // a lista aparece já, sem esperar a produção de cada um
         sincronizarLivres(tk).then(function (livres) {
           if (!livres) return;                       // servidor sem a tabela nova
           var comConta = contas.produtores.filter(function (p) { return p.doServidor; });
@@ -1984,7 +1985,12 @@
         });
         return Promise.all(vindas).then(function () {
           salvarContas();
-          renderProdutores();
+          /* Redesenhar a tela inteira, não só a lista. A produção que acabou
+             de chegar entra nos números do Painel e no relatório, e antes
+             disso ficava só guardada: quem apertava Sincronizar via a lista
+             mudar mas os totais parados, e concluía que o botão não fazia
+             nada.                                                          */
+          render();
         });
       });
   }
@@ -4552,7 +4558,14 @@
     aplicarTema(claroAgora ? "escuro" : "claro");
   });
   document.getElementById("sairLateral").addEventListener("click", function () { sair(); });
-  document.getElementById("sincLateral").addEventListener("click", function () { sincronizar(); });
+  document.getElementById("sincLateral").addEventListener("click", function () {
+    // trava o botão enquanto roda: sem isso, sincronização rápida não dá
+    // sinal nenhum de que algo aconteceu
+    var b = this;
+    if (b.disabled) return;
+    b.disabled = true;
+    sincronizar(function () { b.disabled = false; });
+  });
 
   aplicarTema(temaGuardado());
 
