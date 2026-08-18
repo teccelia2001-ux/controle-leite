@@ -3135,7 +3135,7 @@
 
   var SECOES_PROD = [
     { id: "lancamentos", ico: "✎", nome: "Lançar produção", sub: "Litros do dia",
-      cards: ["welcomeCard", "lancarCard"], topo: true },
+      cards: ["lancarCard"], topo: true },
     { id: "racao",       ico: "◔", nome: "Gastos com ração", sub: "Compras do período",
       cards: ["gastosCard"], topo: true },
     { id: "relatorios",  ico: "▤", nome: "Relatórios",       sub: "Quinzena e histórico",
@@ -3233,6 +3233,17 @@
         else el.hidden = false;
       });
     });
+
+    /* O "Comece por aqui" era o guia de quem abria o sistema sozinho, antes
+       de existir cadastro. O produtor de hoje recebe usuário e senha prontos
+       e cai direto na tela de lançar — as instruções só empurravam o campo
+       para baixo da dobra. Fica só no lado do administrador, que é quem monta
+       o sistema. Precisa ser escondido aqui porque quem manda nele é o
+       render(), pela regra "ainda não há lançamento".                      */
+    if (ehAbasProd()) {
+      var bemVindo = document.getElementById("welcomeCard");
+      if (bemVindo) bemVindo.hidden = true;
+    }
 
     var topo = document.querySelector("header.top");
     if (topo) topo.hidden = !atual.topo;
