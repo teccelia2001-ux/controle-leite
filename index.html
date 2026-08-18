@@ -610,6 +610,7 @@
         <button id="novoProdutor" class="btn-primary">Criar acesso de produtor</button>
         <button id="receberDados">Receber dados de um produtor</button>
         <button id="meuAcesso">Entrar em outro aparelho</button>
+        <button id="minhaSenha">Mudar minha senha</button>
         <button id="limparProdutores">Remover todos</button>
       </div>
       <p style="font-size:13px;color:var(--muted);margin:14px 0 0;max-width:66ch">
@@ -2465,6 +2466,65 @@
       "Só o acesso", function () { gerarAcessoAdmin(false); });
   }
 
+  /* ---------------- trocar a própria senha ----------------
+     A senha do administrador mora em dois lugares: o hash guardado neste
+     aparelho (que faz o login funcionar sem sinal) e a senha da conta no
+     servidor (que vale em qualquer aparelho). Trocar só um dos dois deixa
+     o acesso divergente — então, quando há conta no servidor, exigimos
+     sessão e só gravamos aqui depois que o servidor confirmou.          */
+
+  function mudarMinhaSenha() {
+    if (!contas || !contas.eu) return;
+    janelaForm({
+      titulo: "Mudar minha senha",
+      detalhe: temServidor()
+        ? "Vale em todos os seus aparelhos. Precisa de internet, para não ficar uma senha aqui e outra no servidor."
+        : "Este aparelho não está ligado a um servidor, então a troca vale só aqui.",
+      campos: [
+        { id: "atual", label: "Senha atual", tipo: "password" },
+        { id: "nova", label: "Nova senha", tipo: "password", dica: "mínimo 4 caracteres" },
+        { id: "repete", label: "Repita a nova senha", tipo: "password" }
+      ],
+      textoOk: "Trocar senha",
+      aoConfirmar: function (v, aviso) {
+        if (v.nova.length < 4) { aviso("A nova senha precisa de pelo menos 4 caracteres."); return false; }
+        if (v.nova !== v.repete) { aviso("As duas novas senhas não são iguais."); return false; }
+        if (v.nova === v.atual) { aviso("A nova senha é igual à atual."); return false; }
+
+        return conferirSenha(contas.eu.senha, v.atual).then(function (ok) {
+          if (!ok) { aviso("Senha atual errada."); return false; }
+
+          function gravarAqui() {
+            return criarSenha(v.nova).then(function (s) {
+              contas.eu.senha = s;
+              if (conta && conta.id === contas.eu.id) conta.senha = s;
+              salvarContas();
+              avisar("Senha trocada",
+                temServidor()
+                  ? "Use a senha nova para entrar em qualquer aparelho. Os links de “Entrar em outro aparelho” gerados antes ficaram com a senha antiga: gere de novo se for usar."
+                  : "Use a senha nova neste aparelho.");
+              return true;
+            });
+          }
+
+          if (!temServidor()) return gravarAqui();
+          if (!sessao) {
+            aviso("Entre novamente com internet para trocar a senha do servidor.");
+            return false;
+          }
+          aviso("trocando no servidor…");
+          return mudarSenhaNoServidor(v.nova).then(function (r) {
+            if (!r || !r.ok) {
+              aviso(r && r.erro ? "Não deu certo: " + r.erro : "O servidor não aceitou a troca.");
+              return false;
+            }
+            return gravarAqui();
+          });
+        });
+      }
+    });
+  }
+
   function gerarAcessoAdmin(completo) {
     var corpo = {
       id: conta.id, nome: conta.nome, usuario: conta.usuario, senha: conta.senha
@@ -3748,6 +3808,7 @@
   document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
   document.getElementById("receberDados").addEventListener("click", receberDados);
   document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
+  document.getElementById("minhaSenha").addEventListener("click", mudarMinhaSenha);
   document.getElementById("limparProdutores").addEventListener("click", removerTodosProdutores);
 
   /* ---------------- diagnóstico ----------------
