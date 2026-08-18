@@ -173,6 +173,49 @@
   }
   .sec-head p { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
 
+  /* subtítulo dentro do cartão, separando administradores de produtores */
+  .sub-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 18px 8px; font-size: 11px; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+  }
+  .sub-head span {
+    font-size: 11px; letter-spacing: 0; padding: 1px 7px; border-radius: 10px;
+    background: var(--surface-2); color: var(--ink-2);
+  }
+  .av-mini {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 11.5px;
+  }
+  .etiqueta {
+    font-size: 11.5px; padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+
+  /* escolha de perfil em cartões (Administrador | Produtor) */
+  .escolhas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .escolha {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    border: 1.5px solid var(--line); border-radius: 9px; padding: 11px 12px;
+    background: var(--surface);
+  }
+  .escolha:hover { border-color: var(--muted); }
+  .escolha input { position: absolute; opacity: 0; pointer-events: none; }
+  .escolha .bolinha {
+    flex: 0 0 auto; width: 17px; height: 17px; border-radius: 50%;
+    border: 2px solid var(--line); display: grid; place-items: center;
+  }
+  .escolha.marcada { border-color: var(--accent); background: var(--accent-soft); }
+  .escolha.marcada .bolinha { border-color: var(--accent); }
+  .escolha.marcada .bolinha::after {
+    content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  }
+  .escolha .rot { display: flex; flex-direction: column; min-width: 0; }
+  .escolha .rot b { font-size: 13.5px; font-weight: 600; }
+  .escolha .rot small { font-size: 11.5px; color: var(--muted); }
+  .escolha.marcada .rot b { color: var(--accent); }
+  @media (max-width: 480px) { .escolhas { grid-template-columns: 1fr; } }
+
   /* cartões de números */
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
   .kpi {
@@ -754,10 +797,11 @@
       <span class="hint" id="adminHint">—</span>
     </div>
     <div class="missing" id="avisoServidor" hidden></div>
+    <div id="admLista"></div>
     <div id="prodLista"></div>
     <div class="card-body">
       <div class="tools">
-        <button id="novoProdutor" class="btn-primary">Criar acesso de produtor</button>
+        <button id="novoProdutor" class="btn-primary">+ Novo usuário</button>
         <button id="receberDados">Receber dados de um produtor</button>
         <button id="meuAcesso">Entrar em outro aparelho</button>
         <button id="minhaSenha">Mudar minha senha</button>
@@ -1415,6 +1459,32 @@
       }, function () { return { erro: "sem internet", offline: true }; });
   }
 
+  /* Cria a conta de OUTRO administrador, sem mexer na sessão de quem está
+     criando. O truque é o mesmo do produtor: o cadastro devolve o token da
+     conta nova, e é com ele que gravamos o perfil — a regra do banco só
+     deixa cada um inserir a própria linha (id = auth.uid()).
+
+     `admin_id` fica nulo de propósito: o novo administrador é independente,
+     com a lista de produtores dele. Compartilhar a mesma lista entre dois
+     administradores exigiria uma coluna de "fazenda/organização" no banco e
+     regras novas de acesso — não existe hoje.                            */
+
+  function criarOutroAdminNoServidor(nome, usuario, senha) {
+    return postAuth("signup", { email: emailDe(usuario), password: senha })
+      .then(function (r) {
+        if (!r.ok) return { erro: recado(r) };
+        var j = r.corpo;
+        if (!j.access_token || !j.user) return { erro: "o servidor ainda pede confirmação de e-mail" };
+        return rest("POST", "perfis", {
+          id: j.user.id, nome: nome, usuario: usuario, papel: "admin", admin_id: null
+        }, j.access_token, { Prefer: "return=representation" })
+          .then(function (p) {
+            if (!p.ok || !p.corpo || !p.corpo[0]) return { erro: recado(p) };
+            return { perfil: p.corpo[0] };
+          });
+      }, function () { return { erro: "sem internet", offline: true }; });
+  }
+
   // administrador que nasceu só neste aparelho ganha conta de verdade,
   // levando junto os lançamentos e a lista de produtores
   function ligarAdminAoServidor() {
@@ -1933,10 +2003,28 @@
     over.querySelector("[data-no]").addEventListener("click", fechar);
     document.addEventListener("keydown", tecla);
 
+    // realce do cartão escolhido
+    over.querySelectorAll(".escolhas").forEach(function (g) {
+      g.addEventListener("change", function () {
+        g.querySelectorAll(".escolha").forEach(function (l) {
+          l.classList.toggle("marcada", !!l.querySelector("input:checked"));
+        });
+      });
+    });
+
     function enviar() {
       aviso.textContent = "";
       var vals = {};
-      op.campos.forEach(function (c) { vals[c.id] = over.querySelector("#f_" + c.id).value; });
+      op.campos.forEach(function (c) {
+        var el = over.querySelector("#f_" + c.id);
+        if (!el) { vals[c.id] = ""; return; }
+        if (c.tipo === "escolha") {
+          var m = el.querySelector("input:checked");
+          vals[c.id] = m ? m.value : "";
+          return;
+        }
+        vals[c.id] = el.value;
+      });
       var r = op.aoConfirmar ? op.aoConfirmar(vals, function (t) { aviso.textContent = t; }) : true;
       if (r && typeof r.then === "function") {
         btnOk.disabled = true;
@@ -1956,6 +2044,21 @@
 
   function campoHtml(campos) {
     return campos.map(function (c) {
+      // escolha de perfil: dois cartões com marcador, no lugar de um menu
+      if (c.tipo === "escolha") {
+        return '<div class="field"><label>' + escapeHtml(c.label) +
+          (c.dica ? ' <span class="sublabel">' + escapeHtml(c.dica) + "</span>" : "") + "</label>" +
+          '<div class="escolhas" id="f_' + c.id + '">' +
+          c.opcoes.map(function (o, i) {
+            var marcado = c.valor ? c.valor === o.valor : i === 0;
+            return '<label class="escolha' + (marcado ? " marcada" : "") + '">' +
+              '<input type="radio" name="r_' + c.id + '" value="' + escapeHtml(o.valor) + '"' +
+              (marcado ? " checked" : "") + " />" +
+              '<span class="bolinha"></span>' +
+              '<span class="rot"><b>' + escapeHtml(o.rotulo) + "</b>" +
+              (o.dica ? "<small>" + escapeHtml(o.dica) + "</small>" : "") + "</span></label>";
+          }).join("") + "</div></div>";
+      }
       return '<div class="field"><label for="f_' + c.id + '">' + escapeHtml(c.label) +
         (c.dica ? ' <span class="sublabel">' + escapeHtml(c.dica) + "</span>" : "") + "</label>" +
         '<input id="f_' + c.id + '" type="' + (c.tipo || "text") + '" ' +
@@ -2423,8 +2526,38 @@
     return comDb(normalizar(p.dados), function () { return stats(view); });
   }
 
+  /* Os administradores ficam numa lista à parte, acima dos produtores: são
+     acessos de outra natureza — não lançam produção nem entram na conta da
+     quinzena. Só aparecem os criados a partir deste aparelho, porque a regra
+     do banco não deixa um administrador ver a linha de outro.            */
+
+  function renderAdmins() {
+    var el = document.getElementById("admLista");
+    if (!el) return;
+    var lista = (contas && contas.admins) || [];
+    var eu = (contas && contas.eu) || {};
+    function inic(n) {
+      return String(n || "?").trim().split(/\s+/).slice(0, 2)
+        .map(function (x) { return x.charAt(0).toUpperCase(); }).join("") || "?";
+    }
+    function linha(nome, usuario, etiqueta, voce) {
+      return '<div class="prod-row" style="grid-template-columns:auto 1fr auto">' +
+        '<div class="av-mini">' + escapeHtml(inic(nome)) + "</div>" +
+        '<div class="prod-nome">' + escapeHtml(nome) + (voce ? " <small>(você)</small>" : "") +
+          "<span>" + escapeHtml(usuario) + "</span></div>" +
+        '<div><span class="etiqueta">' + etiqueta + "</span></div></div>";
+    }
+    el.innerHTML =
+      '<div class="sub-head">Administradores <span>' + (lista.length + 1) + "</span></div>" +
+      linha(eu.nome, eu.usuario, "Administrador", true) +
+      lista.map(function (a) { return linha(a.nome, a.usuario, "Administrador", false); }).join("") +
+      '<div class="sub-head" style="margin-top:16px">Produtores <span>' +
+        ((contas && contas.produtores.length) || 0) + "</span></div>";
+  }
+
   function renderProdutores() {
     if (!contas || contas.papel !== "admin") return;
+    renderAdmins();
     var lista = contas.produtores;
     var el = document.getElementById("prodLista");
     var somaLitros = 0, somaSobra = 0, comDados = 0;
@@ -2507,53 +2640,106 @@
     document.getElementById("quem").scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  function criarProdutor() {
+  /* ---------------- novo usuário ----------------
+     Uma porta só para criar acesso, com o perfil escolhido em dois cartões.
+     Produtor cai no fluxo que já existia (com convite no fim). Administrador
+     cria uma conta independente no servidor — por isso exige internet e
+     sessão: sem cadastro no servidor, um "administrador" só valeria neste
+     aparelho e não entraria em nenhum outro.                              */
+
+  function novoUsuario() {
     janelaForm({
-      titulo: "Criar acesso de produtor",
-      detalhe: "Depois de criar, mande o código de convite para o produtor abrir no celular dele.",
+      titulo: "Novo usuário",
+      detalhe: "Escolha o perfil. Produtor recebe um convite para abrir no celular dele; " +
+        "administrador entra com usuário e senha em qualquer aparelho.",
       campos: [
-        { id: "nome", label: "Nome do produtor", placeholder: "ex.: Maria Souza" },
-        { id: "fazenda", label: "Nome da propriedade", dica: "opcional", placeholder: "ex.: Sítio Boa Vista" },
-        { id: "usuario", label: "Usuário", placeholder: "ex.: maria" },
-        { id: "senha", label: "Senha", tipo: "password", dica: "você define e passa para ele" }
+        { id: "nome", label: "Nome completo", placeholder: "ex.: Maria Souza" },
+        { id: "usuario", label: "Usuário", dica: "sem espaço nem acento", placeholder: "ex.: maria" },
+        { id: "senha", label: "Senha", tipo: "password", dica: "mínimo 6 caracteres" },
+        { id: "fazenda", label: "Nome da propriedade", dica: "opcional, só para produtor",
+          placeholder: "ex.: Sítio Boa Vista" },
+        { id: "perfil", label: "Perfil", tipo: "escolha", valor: "produtor", opcoes: [
+          { valor: "produtor", rotulo: "Produtor", dica: "lança a produção" },
+          { valor: "admin", rotulo: "Administrador", dica: "acompanha e cadastra" }
+        ] }
       ],
-      textoOk: "Criar acesso",
+      textoOk: "Criar usuário",
       aoConfirmar: function (v, aviso) {
         var nome = v.nome.trim(), usuario = v.usuario.trim();
         if (!nome || !usuario) { aviso("Preencha o nome e o usuário."); return false; }
-        if (v.senha.length < 4) { aviso("A senha precisa de pelo menos 4 caracteres."); return false; }
+        if (usuario !== limparUsuario(usuario)) {
+          aviso("O usuário sai como “" + limparUsuario(usuario) + "”. Use só letras, números, ponto ou hífen.");
+          return false;
+        }
+        if (v.senha.length < 6) { aviso("A senha precisa de pelo menos 6 caracteres."); return false; }
+        if (usuarioIgual(contas.eu.usuario, usuario)) { aviso("Esse é o seu próprio usuário."); return false; }
         if (contas.produtores.some(function (p) { return usuarioIgual(p.usuario, usuario); })) {
           aviso("Já existe um produtor com esse usuário."); return false;
         }
-        function guardar(id, doServidor) {
-          return criarSenha(v.senha).then(function (s) {
-            var p = {
-              id: id, nome: nome, usuario: usuario, senha: s,
-              fazenda: v.fazenda.trim() || nome,
-              criado: hojeIso(), recebido: null, dados: null, doServidor: !!doServidor
-            };
-            contas.produtores.push(p);
-            marcarLivresSujo();
+        if ((contas.admins || []).some(function (a) { return usuarioIgual(a.usuario, usuario); })) {
+          aviso("Já existe um administrador com esse usuário."); return false;
+        }
+
+        if (v.perfil === "admin") {
+          if (!temServidor() || !sessao) {
+            aviso("Para criar administrador é preciso estar ligado ao servidor, com internet.");
+            return false;
+          }
+          aviso("criando no servidor…");
+          return criarOutroAdminNoServidor(nome, usuario, v.senha).then(function (r) {
+            if (!r.perfil) {
+              if (/already|registered|exists/i.test(r.erro || "")) { aviso("Já existe uma conta com esse usuário."); return false; }
+              aviso("Não deu para criar: " + r.erro);
+              return false;
+            }
+            contas.admins = (contas.admins || []);
+            contas.admins.push({ id: r.perfil.id, nome: nome, usuario: usuario, criado: hojeIso() });
             salvarContas();
             renderProdutores();
-            mostrarConvite(p, v.senha);
+            avisar("Administrador criado",
+              "Passe para " + nome + " o usuário " + usuario + " e a senha que você definiu. " +
+              "Ele entra pelo link do administrador em “Já tenho usuário e senha”.\n\n" +
+              "Atenção: cada administrador tem a própria lista de produtores. Os seus produtores " +
+              "não aparecem para ele, e os dele não aparecem para você.");
             return true;
           });
         }
-
-        if (!temServidor() || !sessao) return guardar(novoId(), false);
-        aviso("criando no servidor…");
-        return criarProdutorNoServidor(nome, usuario, v.senha, v.fazenda.trim() || nome)
-          .then(function (r) {
-            if (r.perfil) return guardar(r.perfil.id, true);
-            if (/already|registered|exists/i.test(r.erro || "")) {
-              aviso("Já existe uma conta com esse usuário."); return false;
-            }
-            aviso("Não deu para criar no servidor: " + r.erro);
-            return false;
-          });
+        return criarProdutorComDados(nome, usuario, v.senha, v.fazenda.trim() || nome, aviso);
       }
     });
+  }
+
+  // o miolo da criação de produtor, usado pelo "Novo usuário"
+  function criarProdutorComDados(nome, usuario, senha, fazenda, aviso) {
+    function guardar(id, doServidor) {
+      return criarSenha(senha).then(function (s) {
+        var p = {
+          id: id, nome: nome, usuario: usuario, senha: s, fazenda: fazenda,
+          criado: hojeIso(), recebido: null, dados: null, doServidor: !!doServidor
+        };
+        contas.produtores.push(p);
+        marcarLivresSujo();
+        salvarContas();
+        renderProdutores();
+        mostrarConvite(p, senha);
+        return true;
+      });
+    }
+    if (!temServidor() || !sessao) return guardar(novoId(), false);
+    aviso("criando no servidor…");
+    return criarProdutorNoServidor(nome, usuario, senha, fazenda).then(function (r) {
+      if (r.perfil) return guardar(r.perfil.id, true);
+      if (/already|registered|exists/i.test(r.erro || "")) {
+        aviso("Já existe uma conta com esse usuário."); return false;
+      }
+      aviso("Não deu para criar no servidor: " + r.erro);
+      return false;
+    });
+  }
+
+  // mostra como o usuário vai ficar depois da limpeza que o servidor exige
+  function limparUsuario(u) {
+    return String(u).trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
   }
 
   function editarProdutor(p) {
@@ -3079,11 +3265,15 @@
     if (atual.id === "painel") renderPainel();
   }
 
+  /* O administrador não é produtor: a produção dele não entra na lista nem
+     nos totais dos produtores. Se ele também lança (é comum ter a própria
+     vaca), isso aparece num cartão separado, "Sua produção".            */
+
   function renderPainel() {
     var lista = (contas && contas.produtores) || [];
     var meu = stats(view);
-    var litros = meu.total, sobra = meu.sobra || 0, gasto = meu.gastoTotal, comDados = 0;
-    var linhas = [{ nome: (contas.eu && contas.eu.nome) || "Eu", litros: meu.total, sobra: meu.sobra, eu: true }];
+    var litros = 0, sobra = 0, gasto = 0, comDados = 0;
+    var linhas = [];
 
     lista.forEach(function (p) {
       var s = p.dados ? statsDe(p) : null;
@@ -3099,11 +3289,17 @@
         '<div class="num">' + num + '</div><div class="rot">' + rot + "</div>" +
         '<div class="sub">' + sub + "</div></div>";
     }
-    document.getElementById("painelKpis").innerHTML =
+    var kpis =
       kpi("", "☰", lista.length, "Produtores", comDados + " com produção enviada") +
-      kpi("", "◍", nL(litros, 0) + " L", "Litros na quinzena", periodName(view)) +
-      kpi("dinheiro", "◎", nBRL(sobra), "Sobra somada", "receita menos ração") +
-      kpi("", "◔", nBRL(gasto), "Gasto com ração", "na quinzena");
+      kpi("", "◍", nL(litros, 0) + " L", "Litros dos produtores", periodName(view)) +
+      kpi("dinheiro", "◎", nBRL(sobra), "Sobra dos produtores", "receita menos ração") +
+      kpi("", "◔", nBRL(gasto), "Ração dos produtores", "na quinzena");
+    // a sua própria produção, quando existe, fica à parte
+    if (meu.total > 0) {
+      kpis += kpi("", "◐", nL(meu.total, 0) + " L", "Sua produção",
+        meu.sobra !== null ? "sobra de " + nBRL(meu.sobra) : "sem preço definido");
+    }
+    document.getElementById("painelKpis").innerHTML = kpis;
 
     linhas.sort(function (a, b) { return (b.litros || 0) - (a.litros || 0); });
     var maior = linhas.reduce(function (m, l) { return Math.max(m, l.litros || 0); }, 0);
@@ -3115,7 +3311,7 @@
       linhas.map(function (l) {
           var pct = maior ? Math.round((l.litros || 0) / maior * 100) : 0;
           return '<div class="prod-row" style="grid-template-columns:1fr auto">' +
-            '<div class="prod-nome">' + escapeHtml(l.nome) + (l.eu ? " <small>(você)</small>" : "") +
+            '<div class="prod-nome">' + escapeHtml(l.nome) +
               '<span><span style="display:inline-block;height:5px;border-radius:3px;background:var(--accent);width:' +
               Math.max(pct, 2) + '%;min-width:6px"></span></span></div>' +
             '<div class="prod-num">' + (l.litros === null ? "—" : nL(l.litros, 0) + " L") +
@@ -4188,7 +4384,7 @@
     document.getElementById("fMeta").value = db.config.meta !== null ? db.config.meta : "";
   }
 
-  document.getElementById("novoProdutor").addEventListener("click", criarProdutor);
+  document.getElementById("novoProdutor").addEventListener("click", novoUsuario);
   document.getElementById("receberDados").addEventListener("click", receberDados);
   document.getElementById("meuAcesso").addEventListener("click", meuAcessoAdmin);
   document.getElementById("minhaSenha").addEventListener("click", mudarMinhaSenha);
