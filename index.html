@@ -527,7 +527,8 @@
   .quem .espaco { flex: 1 1 auto; }
   .quem.olhando { background: var(--warn-soft); border-color: var(--money); }
   .quem.olhando .tag { color: var(--money); background: var(--money-soft); }
-  body.leitura .card.focus, body.leitura #gastoForm, body.leitura details#settings .tools { display: none; }
+  body.leitura:not(.adm-edita) .card.focus, body.leitura:not(.adm-edita) #gastoForm,
+  body.leitura:not(.adm-edita) details#settings .tools { display: none; }
 
   /* ---------- administração ---------- */
 
@@ -706,21 +707,6 @@
       <button class="btn-ghost" id="todayBtn">hoje</button>
     </div>
   </header>
-
-  <section class="card" id="welcomeCard" hidden>
-    <div class="card-head"><h2>Comece por aqui</h2></div>
-    <div class="card-body welcome">
-      <p>Anote todo dia quantos litros saíram do tanque. O resto o sistema faz sozinho: fecha a conta a cada quinzena e monta o relatório pronto para enviar.</p>
-      <ol class="steps">
-        <li>Lance a produção de hoje no campo abaixo — só a data e os litros são obrigatórios.</li>
-        <li>Informe o preço do litro em <em>Ajustes</em> para acompanhar quanto isso vale em dinheiro.</li>
-        <li>No dia 15 e no último dia do mês a quinzena fecha; use <em>Copiar relatório</em> para mandar no WhatsApp.</li>
-      </ol>
-      <div class="tools">
-        <button id="demoBtn2">Ver funcionando com dados de exemplo</button>
-      </div>
-    </div>
-  </section>
 
   <section class="card focus" id="lancarCard">
     <div class="card-head">
@@ -978,10 +964,31 @@
   }
 
   function save() {
-    if (!conta || leitura) return;          // olhando dados de outro: não grava
+    if (!conta) return;
+
+    /* Administrador lançando pelo produtor: o que ele digita pertence ao
+       produtor, não a ele. Grava na cópia daquele produtor e manda para o
+       servidor com o id dele — nunca no armazenamento do administrador,
+       que misturaria a produção dos dois.                                */
+    if (leitura) {
+      if (!editandoPeloProdutor()) return;   // sem permissão: continua só olhando
+      vendo.dados = db;
+      vendo.recebido = hojeIso();
+      salvarContas();
+      agendarEnvioDoProdutor();
+      return;
+    }
+
     try { localStorage.setItem(chaveDados(conta.id), JSON.stringify(db)); } catch (e) {}
     if (typeof marcarSujo === "function") marcarSujo(true);
     if (typeof agendarSync === "function") agendarSync();
+  }
+
+  // o administrador só edita pelo produtor quando há conta no servidor:
+  // sem isso a correção ficaria presa neste aparelho e nunca chegaria nele
+  function editandoPeloProdutor() {
+    return !!(leitura && vendo && contas && contas.papel === "admin" &&
+              vendo.doServidor && temServidor() && sessao);
   }
 
   /* ---------------- contas de acesso ----------------
@@ -1649,6 +1656,7 @@
         if (vendo) {
           vendo = null; leitura = false;
           document.body.classList.remove("leitura");
+          document.body.classList.remove("adm-edita");
           db = load(); hydrate();
         }
         salvarContas();
@@ -1922,6 +1930,77 @@
   }
 
   // a lista de produtores passa a vir do servidor, com a produção deles
+  /* ---------------- envio em nome do produtor ----------------
+     Mesmo desenho da sincronização normal, só que o dono das linhas é o
+     produtor aberto. Exige a política nova do banco
+     (supabase/02-admin-lanca-pelo-produtor.sql): sem ela o servidor
+     recusa com 42501 e o app avisa em vez de fingir que gravou.        */
+
+  var envioProdutorAgendado = null;
+
+  function agendarEnvioDoProdutor(atraso) {
+    if (!editandoPeloProdutor()) return;
+    clearTimeout(envioProdutorAgendado);
+    var p = vendo;
+    envioProdutorAgendado = setTimeout(function () { enviarDoProdutor(p); },
+                                       atraso === undefined ? 1200 : atraso);
+  }
+
+  function enviarDoProdutor(p, aoFim) {
+    if (!p || !p.dados) { if (aoFim) aoFim(); return; }
+    marcarSync("enviando para " + p.nome + "…");
+    token().then(function (tk) {
+      if (!tk) { marcarSync("entre de novo para sincronizar"); if (aoFim) aoFim(); return; }
+      var d = p.dados;
+      var mudou = false;
+      d.gastos.forEach(function (g) { if (!ehUuid(g.id)) { g.id = uuid(); mudou = true; } });
+      if (mudou) salvarContas();
+
+      var regs = Object.keys(d.registros).map(function (k) {
+        var r = d.registros[k];
+        return { produtor_id: p.id, data: k, litros: r.litros,
+                 vacas: (typeof r.vacas === "number" ? r.vacas : null), obs: r.obs || null };
+      });
+      var gas = d.gastos.map(function (g) {
+        return { id: g.id, produtor_id: p.id, data: g.data, valor: g.valor,
+                 kg: (typeof g.kg === "number" ? g.kg : null), descricao: g.desc || null };
+      });
+      var envios = [];
+      if (regs.length) envios.push(rest("POST", "registros", regs, tk, { Prefer: "resolution=merge-duplicates" }));
+      if (gas.length) envios.push(rest("POST", "gastos", gas, tk, { Prefer: "resolution=merge-duplicates" }));
+
+      Promise.all(envios).then(function (rr) {
+        var negado = rr.some(function (r) { return r && r.corpo && r.corpo.code === "42501"; });
+        if (negado) {
+          marcarSync("o banco não deixa o administrador lançar — falta rodar 02-admin-lanca-pelo-produtor.sql");
+          avisar("O banco recusou",
+            "Para lançar pelo produtor é preciso rodar uma vez, no SQL Editor do Supabase, o arquivo " +
+            "supabase/02-admin-lanca-pelo-produtor.sql. Enquanto isso, o que você digitou ficou guardado " +
+            "aqui e vai subir assim que a permissão existir.");
+        } else {
+          marcarSync("enviado para " + p.nome + " · " + agoraCurto());
+        }
+        if (aoFim) aoFim();
+      }, function () {
+        marcarSync("sem internet — vai quando voltar");
+        if (aoFim) aoFim();
+      });
+    });
+  }
+
+  // apagar em nome do produtor vai direto, sem passar pela lista de
+  // exclusões do administrador (que é do acervo dele, não do produtor)
+  function apagarDoProdutor(p, tipo, chave) {
+    if (!p) return;
+    token().then(function (tk) {
+      if (!tk) return;
+      var alvo = tipo === "registros"
+        ? "registros?produtor_id=eq." + p.id + "&data=eq." + chave
+        : "gastos?id=eq." + chave;
+      rest("DELETE", alvo, null, tk);
+    });
+  }
+
   function puxarProdutores(tk) {
     return rest("GET", "perfis?admin_id=eq." + conta.id + "&select=id,nome,usuario,fazenda,criado_em", null, tk)
       .then(function (r) {
@@ -2516,6 +2595,7 @@
     estadoSync = "";
     conta = null; leitura = false; db = vazio();
     document.body.classList.remove("leitura");
+    document.body.classList.remove("adm-edita");
     document.body.classList.remove("painel-adm");     // a lateral não fica sobre a tela de entrada
     document.getElementById("side").hidden = true;
     gate("login");
@@ -2527,12 +2607,16 @@
     el.hidden = false;
     el.className = "quem" + (leitura ? " olhando" : "");
     if (leitura) {
-      el.innerHTML = '<span class="tag">Só olhando</span><strong>' + escapeHtml(db.config.fazenda) +
-        "</strong><span>dados enviados por " + escapeHtml(vendo ? vendo.nome : "") + "</span>" +
+      var editando = editandoPeloProdutor();
+      el.innerHTML = '<span class="tag">' + (editando ? "Lançando por ele" : "Só olhando") + "</span><strong>" +
+        escapeHtml(db.config.fazenda) +
+        "</strong><span>" + (editando ? "o que você salvar vai para a conta de " : "dados enviados por ") +
+        escapeHtml(vendo ? vendo.nome : "") + "</span>" +
         '<span class="espaco"></span><button id="voltarAdmin" class="btn-primary">Voltar para os meus dados</button>';
       el.querySelector("#voltarAdmin").addEventListener("click", function () {
         vendo = null; leitura = false;
         document.body.classList.remove("leitura");
+        document.body.classList.remove("adm-edita");
         db = load(); hydrate(); render();
       });
       travarCampos(true);
@@ -2561,6 +2645,7 @@
 
   // enquanto o administrador só olha, nada nesta tela pode ser mexido
   function travarCampos(travar) {
+    if (travar && document.body.classList.contains("adm-edita")) travar = false;
     ["farmName", "fPreco", "fMeta"].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.readOnly = travar;
@@ -2639,7 +2724,7 @@
             "<small>" + (p.recebido ? "enviado " + diaCurto(p.recebido) : "nada recebido") + "</small></div>" +
           '<div class="prod-num">' + (s && s.sobra !== null ? nBRL(s.sobra) : "—") + "<small>sobra</small></div>" +
           '<div class="prod-acoes">' +
-            (p.dados ? '<button data-ver="' + p.id + '">Abrir</button>' : "") +
+            '<button data-ver="' + p.id + '">' + (p.dados ? "Abrir" : "Lançar por ele") + "</button>" +
             (!p.doServidor && sessao ? '<button data-promover="' + p.id + '">Dar login a ele</button>' : "") +
             (p.doServidor ? "" : '<button data-convite="' + p.id + '">Convite</button>') +
             '<button data-editar="' + p.id + '">Editar</button>' +
@@ -2688,11 +2773,14 @@
 
   function abrirProdutor(id) {
     var p = acharProdutor(id);
-    if (!p || !p.dados) return;
+    if (!p) return;
     vendo = p;
     leitura = true;
     db = normalizar(p.dados);
     document.body.classList.add("leitura");
+    // administrador com conta no servidor pode corrigir e lançar pelo produtor
+    document.body.classList.toggle("adm-edita",
+      !!(contas && contas.papel === "admin" && p.doServidor && temServidor() && sessao));
     hydrate();
     // os cartões de produção vivem na seção Lançamentos: sem isto o "Abrir"
     // trocava os dados por trás e a tela parecia não fazer nada
@@ -3136,7 +3224,7 @@
     { id: "produtores",  ico: "☰", nome: "Usuários",    sub: "Acessos e convites",
       cards: ["adminCard"] },
     { id: "lancamentos", ico: "✎", nome: "Lançamentos", sub: "Produção e gastos",
-      cards: ["welcomeCard", "lancarCard", "gastosCard"], topo: true },
+      cards: ["lancarCard", "gastosCard"], topo: true },
     { id: "relatorios",  ico: "▤", nome: "Relatórios",  sub: "Quinzena e histórico",
       cards: ["donoCard", "resumoCard", "diaCard", "relatorioCard", "historicoCard"], topo: true },
     { id: "ajustes",     ico: "⚙", nome: "Ajustes",     sub: "Dados e backup",
@@ -3244,23 +3332,15 @@
         if (!el) return;
         if (s.id !== atual.id) { el.hidden = true; return; }
         // dentro da seção escolhida, cada cartão mantém a própria regra
-        if (cid === "welcomeCard") el.hidden = totalGeral() > 0;
-        else if (cid === "ligarCard") el.hidden = !(temServidor() && !sessao && contas.papel === "produtor");
+        if (cid === "ligarCard") el.hidden = !(temServidor() && !sessao && contas.papel === "produtor");
         else el.hidden = false;
       });
     });
 
-    /* O "Comece por aqui" era o guia de quem abria o sistema sozinho, antes
-       de existir cadastro. O produtor de hoje recebe usuário e senha prontos
-       e cai direto na tela de lançar — as instruções só empurravam o campo
-       para baixo da dobra. Fica só no lado do administrador, que é quem monta
-       o sistema. Precisa ser escondido aqui porque quem manda nele é o
-       render(), pela regra "ainda não há lançamento".                      */
-    if (ehAbasProd()) {
-      var bemVindo = document.getElementById("welcomeCard");
-      if (bemVindo) bemVindo.hidden = true;
-    }
-
+    /* O cartão "Comece por aqui" foi removido de vez: era o guia de quem abria
+       o sistema sozinho, antes de existir cadastro. Hoje tanto o produtor
+       quanto o administrador recebem ou criam acesso, e as instruções só
+       empurravam o que importa para baixo da dobra.                        */
     var topo = document.querySelector("header.top");
     if (topo) topo.hidden = !atual.topo;
 
@@ -3318,6 +3398,7 @@
         if (id === "eu") {
           vendo = null; leitura = false;
           document.body.classList.remove("leitura");
+          document.body.classList.remove("adm-edita");
           db = load(); hydrate(); render();
           return;
         }
@@ -3416,7 +3497,6 @@
     var s = stats(view);
     var sAnt = stats(shiftPeriod(view, -1));
 
-    document.getElementById("welcomeCard").hidden = totalGeral() > 0;
     document.getElementById("periodTitle").textContent = periodName(view);
     document.getElementById("periodRange").textContent = periodRangeLabel(view);
     document.getElementById("resumoTitle").textContent = periodName(view);
@@ -3643,7 +3723,8 @@
           "Os " + nL(r.litros, 1) + " L lançados nesse dia serão removidos.",
           "Excluir", true, function () {
             delete db.registros[k];
-            jogarNoLixo("registros", k);
+            if (editandoPeloProdutor()) apagarDoProdutor(vendo, "registros", k);
+            else jogarNoLixo("registros", k);
             save(); render();
             msg("Lançamento de " + diaCurto(k) + " excluído.", true);
           });
@@ -3687,7 +3768,8 @@
           nBRL(g.valor) + " em " + diaCurto(g.data) + (g.desc ? " — " + g.desc : "") + ".",
           "Excluir", true, function () {
             db.gastos = db.gastos.filter(function (x) { return String(x.id) !== id; });
-            jogarNoLixo("gastos", id);
+            if (editandoPeloProdutor()) apagarDoProdutor(vendo, "gastos", id);
+            else jogarNoLixo("gastos", id);
             save(); render();
             gastoMsg("Compra excluída.", true);
           });
@@ -4439,7 +4521,6 @@
     msg("Exemplo carregado. Para limpar, use Apagar tudo em Ajustes.", true);
   }
   document.getElementById("demoBtn").addEventListener("click", carregarExemplo);
-  document.getElementById("demoBtn2").addEventListener("click", carregarExemplo);
 
   document.getElementById("wipeBtn").addEventListener("click", function () {
     var qtdLeite = totalGeral(), qtdRacao = db.gastos.length;
