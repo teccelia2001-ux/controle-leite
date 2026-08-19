@@ -757,6 +757,16 @@
     <div class="missing" id="missing" hidden></div>
   </section>
 
+  <section class="card" id="donoCard" hidden>
+    <div class="card-head">
+      <h2>De quem é este relatório</h2>
+      <span class="hint">escolha para ver os números</span>
+    </div>
+    <div class="card-body" style="padding:14px 18px">
+      <div class="tools" id="donoBotoes"></div>
+    </div>
+  </section>
+
   <section class="card" id="resumoCard">
     <div class="card-head">
       <h2 id="resumoTitle">Resumo da quinzena</h2>
@@ -3128,7 +3138,7 @@
     { id: "lancamentos", ico: "✎", nome: "Lançamentos", sub: "Produção e gastos",
       cards: ["welcomeCard", "lancarCard", "gastosCard"], topo: true },
     { id: "relatorios",  ico: "▤", nome: "Relatórios",  sub: "Quinzena e histórico",
-      cards: ["resumoCard", "diaCard", "relatorioCard", "historicoCard"], topo: true },
+      cards: ["donoCard", "resumoCard", "diaCard", "relatorioCard", "historicoCard"], topo: true },
     { id: "ajustes",     ico: "⚙", nome: "Ajustes",     sub: "Dados e backup",
       cards: ["settings", "ligarCard"] }
   ];
@@ -3276,6 +3286,47 @@
      Exportar CSV continua sempre: serve para levar ao Excel, não para
      proteger o dado.                                                     */
 
+  /* ---------------- de quem é o relatório ----------------
+     O administrador quase nunca lança leite, então o Resumo e o Relatório
+     dele apareciam zerados e davam a impressão de que a produção enviada
+     pelos produtores não tinha chegado. O dado estava lá — só era preciso
+     "abrir" o produtor, o que não estava dito em lugar nenhum. Agora a
+     escolha fica em cima dos relatórios, com o dono atual destacado.     */
+
+  function renderDono() {
+    var card = document.getElementById("donoCard");
+    var alvo = document.getElementById("donoBotoes");
+    if (!card || !alvo) return;
+    if (!ehPainelAdm()) { card.hidden = true; return; }
+
+    var lista = (contas.produtores || []).filter(function (p) { return p.dados; });
+    var semDados = (contas.produtores || []).length - lista.length;
+
+    alvo.innerHTML =
+      '<button data-dono="eu"' + (!vendo ? ' class="btn-primary"' : "") + ">Meus dados</button>" +
+      lista.map(function (p) {
+        var s = statsDe(p);
+        return '<button data-dono="' + p.id + '"' + (vendo && vendo.id === p.id ? ' class="btn-primary"' : "") + ">" +
+          escapeHtml(p.nome) + " · " + nL(s.total, 0) + " L</button>";
+      }).join("") +
+      (semDados ? '<span style="font-size:12.5px;color:var(--muted);align-self:center">' +
+        semDados + (semDados > 1 ? " produtores ainda não mandaram nada" : " produtor ainda não mandou nada") + "</span>" : "");
+
+    alvo.querySelectorAll("[data-dono]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = this.getAttribute("data-dono");
+        if (id === "eu") {
+          vendo = null; leitura = false;
+          document.body.classList.remove("leitura");
+          db = load(); hydrate(); render();
+          return;
+        }
+        abrirProdutor(id);
+        irParaSecao("relatorios");   // abrirProdutor pula para Lançamentos
+      });
+    });
+  }
+
   function renderDados() {
     var noServidor = !!(temServidor() && sessao);
     var grupo = document.getElementById("grupoBackup");
@@ -3381,6 +3432,7 @@
     renderMissing();
     renderQuem();
     renderProdutores();
+    renderDono();
     renderDados();
     syncEntry();
     aplicarSecao();   // por último: manda na visibilidade dos cartões
