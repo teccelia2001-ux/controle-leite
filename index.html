@@ -736,6 +736,7 @@
         <div class="field">
           <label>&nbsp;</label>
           <button type="submit" class="btn-primary" id="saveBtn">Salvar</button>
+          <button type="button" id="excluirDiaBtn" hidden>Excluir este dia</button>
         </div>
       </form>
       <div class="form-msg" id="formMsg"></div>
@@ -3717,19 +3718,28 @@
     Array.prototype.forEach.call(wrap.querySelectorAll("[data-del]"), function (b) {
       b.addEventListener("click", function (ev) {
         ev.stopPropagation();
-        var k = b.getAttribute("data-del");
-        var r = db.registros[k];
-        perguntar("Excluir o dia " + diaCurto(k) + "?",
-          "Os " + nL(r.litros, 1) + " L lançados nesse dia serão removidos.",
-          "Excluir", true, function () {
-            delete db.registros[k];
-            if (editandoPeloProdutor()) apagarDoProdutor(vendo, "registros", k);
-            else jogarNoLixo("registros", k);
-            save(); render();
-            msg("Lançamento de " + diaCurto(k) + " excluído.", true);
-          });
+        excluirDia(b.getAttribute("data-del"));
       });
     });
+  }
+
+  /* Excluir um dia, venha o pedido da lista "Dia a dia" ou do botão na tela
+     de lançamento. Um caminho só, para os dois se comportarem igual —
+     inclusive quando é o administrador lançando pelo produtor.          */
+
+  function excluirDia(k) {
+    var r = k ? db.registros[k] : null;
+    if (!r) return;
+    perguntar("Excluir o dia " + diaCurto(k) + "?",
+      "Os " + nL(r.litros, 1) + " L lançados nesse dia serão removidos" +
+      (editandoPeloProdutor() ? " da conta de " + vendo.nome : "") + ". Não dá para desfazer.",
+      "Excluir", true, function () {
+        delete db.registros[k];
+        if (editandoPeloProdutor()) apagarDoProdutor(vendo, "registros", k);
+        else jogarNoLixo("registros", k);
+        save(); render();
+        msg("Lançamento de " + diaCurto(k) + " excluído.", true);
+      });
   }
 
   function renderGastos(s) {
@@ -3926,6 +3936,12 @@
     var ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
     document.getElementById("chipOntem").classList.toggle("on", k === iso(ontem));
 
+    /* Excluir vivia só na lista "Dia a dia", que hoje está em Relatórios —
+       longe de onde a pessoa percebe o erro. O botão aparece aqui quando a
+       data escolhida já tem lançamento, que é exatamente quando faz sentido. */
+    var btnEx = document.getElementById("excluirDiaBtn");
+    if (btnEx) btnEx.hidden = !r;
+
     if (r) {
       btn.textContent = "Atualizar";
       titulo.textContent = "Corrigir o dia " + diaCurto(k);
@@ -3952,6 +3968,10 @@
     document.getElementById("fLitros").select();
     document.getElementById("entryForm").scrollIntoView({ behavior: "smooth", block: "center" });
   }
+
+  document.getElementById("excluirDiaBtn").addEventListener("click", function () {
+    excluirDia(document.getElementById("fData").value);
+  });
 
   document.getElementById("entryForm").addEventListener("submit", function (ev) {
     ev.preventDefault();
