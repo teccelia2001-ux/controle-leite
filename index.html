@@ -684,10 +684,19 @@
         <h1>Painel</h1>
         <p>Visão geral da quinzena e dos produtores</p>
       </div>
+      <div class="period-nav">
+        <button class="nav-btn" id="painelPrev" aria-label="Quinzena anterior" title="Quinzena anterior">&larr;</button>
+        <div class="period-label">
+          <strong id="painelPeriodoTitulo">—</strong>
+          <span id="painelPeriodoFaixa">—</span>
+        </div>
+        <button class="nav-btn" id="painelNext" aria-label="Próxima quinzena" title="Próxima quinzena">&rarr;</button>
+        <button class="btn-ghost" id="painelHoje">hoje</button>
+      </div>
     </div>
     <div class="kpis" id="painelKpis"></div>
     <div class="card" style="margin-top:18px">
-      <div class="card-head"><h2>Produtores por produção</h2><span class="hint">na quinzena atual</span></div>
+      <div class="card-head"><h2>Produtores por produção</h2><span class="hint" id="painelTopHint">—</span></div>
       <div class="card-body" id="painelTop"></div>
     </div>
   </section>
@@ -3458,6 +3467,14 @@
         '<div class="num">' + num + '</div><div class="rot">' + rot + "</div>" +
         '<div class="sub">' + sub + "</div></div>";
     }
+    // a quinzena que o painel está mostrando, com as setas ao lado do título
+    var t = document.getElementById("painelPeriodoTitulo");
+    var f = document.getElementById("painelPeriodoFaixa");
+    if (t) t.textContent = periodName(view);
+    if (f) f.textContent = periodRangeLabel(view);
+    var th = document.getElementById("painelTopHint");
+    if (th) th.textContent = "na " + periodName(view).toLowerCase();
+
     var kpis =
       kpi("", "☰", lista.length, "Produtores", comDados + " com produção enviada") +
       kpi("", "◍", nL(litros, 0) + " L", "Litros dos produtores", periodName(view)) +
@@ -4061,6 +4078,12 @@
   });
 
   /* ---------------- navegação ---------------- */
+
+  /* As setas do Painel mexem na mesma quinzena das outras seções: mudar aqui
+     e achar Relatórios noutra quinzena confundiria mais do que ajudaria. */
+  document.getElementById("painelPrev").addEventListener("click", function () { view = shiftPeriod(view, -1); render(); });
+  document.getElementById("painelNext").addEventListener("click", function () { view = shiftPeriod(view, 1); render(); });
+  document.getElementById("painelHoje").addEventListener("click", function () { view = periodOf(new Date()); render(); });
 
   document.getElementById("prevPeriod").addEventListener("click", function () { view = shiftPeriod(view, -1); render(); });
   document.getElementById("nextPeriod").addEventListener("click", function () { view = shiftPeriod(view, 1); render(); });
