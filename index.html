@@ -824,6 +824,11 @@
       <span class="hint">Texto pronto para enviar</span>
     </div>
     <div class="card-body">
+      <div class="tools" style="margin-bottom:14px">
+        <span style="font-size:12.5px;color:var(--muted);align-self:center">Modelo:</span>
+        <button type="button" class="chip" id="chipSimples">Resumido</button>
+        <button type="button" class="chip" id="chipCompleto">Completo</button>
+      </div>
       <pre class="report" id="report">—</pre>
       <div class="tools">
         <button id="imgReport" class="btn-primary">Salvar em imagem</button>
@@ -3837,9 +3842,51 @@
                 .sort(function (a, b) { return b.valor - a.valor; });
   }
 
+  /* ---------------- dois modelos de relatório ----------------
+     O completo é o de sempre, com dia a dia, ração por tipo e comparação.
+     O resumido responde as três perguntas que a maioria faz no WhatsApp:
+     quanto produziu, quanto gastou de ração e quanto sobrou. A escolha fica
+     guardada no aparelho e vale também para a imagem, o PDF e o "copiar",
+     porque os três leem este mesmo texto.                                */
+
+  var MODELO = "controle-leite.relatorio.v1";
+
+  function modeloRelatorio() {
+    try { return localStorage.getItem(MODELO) === "simples" ? "simples" : "completo"; }
+    catch (e) { return "completo"; }
+  }
+
+  function definirModelo(m) {
+    try { localStorage.setItem(MODELO, m); } catch (e) {}
+    render();
+  }
+
   function renderReport(s, sAnt) {
     var el = document.getElementById("report");
+    var simples = modeloRelatorio() === "simples";
+    var cs = document.getElementById("chipSimples"), cc = document.getElementById("chipCompleto");
+    if (cs) cs.classList.toggle("on", simples);
+    if (cc) cc.classList.toggle("on", !simples);
+
     if (!s.lancados) { el.textContent = "Sem lançamentos nesta quinzena — nada a informar ainda."; return; }
+
+    if (simples) {
+      var R = [];
+      R.push(db.config.fazenda.toUpperCase());
+      R.push(periodName(view).toUpperCase() + " (" + periodRangeLabel(view) + ")");
+      R.push("");
+      R.push("Produção total ..... " + nL(s.total, 1) + " L");
+      R.push("Ração .............. " + (s.gastoTotal ? nBRL(s.gastoTotal) : "nada comprado"));
+      if (s.receita === null) {
+        R.push("Resultado .......... informe o preço do litro para calcular");
+      } else {
+        R.push("Valor do leite ..... " + nBRL(s.receita) + " (a " + nBRL(s.preco) + "/L)");
+        R.push("Resultado .......... " + nBRL(s.receita - s.gastoTotal));
+      }
+      el.textContent = R.join("\n");
+      return;
+    }
+
     var L = [];
     L.push(db.config.fazenda.toUpperCase());
     L.push(periodName(view).toUpperCase() + " (" + periodRangeLabel(view) + ")");
@@ -4043,6 +4090,9 @@
   });
 
   /* ---------------- relatório ---------------- */
+
+  document.getElementById("chipSimples").addEventListener("click", function () { definirModelo("simples"); });
+  document.getElementById("chipCompleto").addEventListener("click", function () { definirModelo("completo"); });
 
   document.getElementById("copyReport").addEventListener("click", function () {
     var txt = document.getElementById("report").textContent, btn = this;
