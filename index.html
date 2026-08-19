@@ -1966,7 +1966,10 @@
         return { id: g.id, produtor_id: p.id, data: g.data, valor: g.valor,
                  kg: (typeof g.kg === "number" ? g.kg : null), descricao: g.desc || null };
       });
-      var envios = [];
+      var envios = [rest("POST", "ajustes", {
+        produtor_id: p.id, fazenda: d.config.fazenda,
+        preco: d.config.preco, meta: d.config.meta, precos: d.precos || {}
+      }, tk, { Prefer: "resolution=merge-duplicates" })];
       if (regs.length) envios.push(rest("POST", "registros", regs, tk, { Prefer: "resolution=merge-duplicates" }));
       if (gas.length) envios.push(rest("POST", "gastos", gas, tk, { Prefer: "resolution=merge-duplicates" }));
 
@@ -3593,9 +3596,10 @@
     if (s.custoPorKg !== null) strip.push("Ração paga: <b>" + nBRL(s.custoPorKg) + "</b> por kg");
     var pi = document.getElementById("precoInline");
     if (pi) {
-      pi.readOnly = leitura;
+      // o preço é do dono da quinzena: quem lança por ele também define
+      pi.readOnly = leitura && !editandoPeloProdutor();
       pi.addEventListener("change", function () {
-        if (leitura) return;
+        if (leitura && !editandoPeloProdutor()) return;
         var v = parseFloat(String(pi.value).replace(",", "."));
         var valido = !isNaN(v) && v > 0;
         definirPreco(view, valido ? v : null);
@@ -4019,20 +4023,20 @@
 
   var farm = document.getElementById("farmName");
   farm.addEventListener("input", function () {
-    if (leitura) return;
+    if (leitura && !editandoPeloProdutor()) return;
     db.config.fazenda = farm.value.trim() || "Produção de Leite";
     save();
     renderReport(stats(view), stats(shiftPeriod(view, -1)));
   });
 
   document.getElementById("fPreco").addEventListener("input", function () {
-    if (leitura) return;
+    if (leitura && !editandoPeloProdutor()) return;
     var v = parseFloat(String(this.value).replace(",", "."));
     db.config.preco = isNaN(v) || v <= 0 ? null : v;
     save(); render();
   });
   document.getElementById("fMeta").addEventListener("input", function () {
-    if (leitura) return;
+    if (leitura && !editandoPeloProdutor()) return;
     var v = parseFloat(String(this.value).replace(",", "."));
     db.config.meta = isNaN(v) || v <= 0 ? null : v;
     save(); render();
