@@ -942,7 +942,7 @@
                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   var SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
-  var VERSAO = "01/08 15:32";
+  var VERSAO = "21/08 10:40";
   var CONTAS = "controle-leite.contas.v1";
   var PREFIXO = "controle-leite.dados.";
 
@@ -3156,7 +3156,27 @@
   // cada quinzena pode ter seu próprio preço; sem ele, vale o padrão dos Ajustes
   function precoDe(p) {
     var v = db.precos[periodKey(p)];
-    return (typeof v === "number" && v > 0) ? v : db.config.preco;
+    if (typeof v === "number" && v > 0) return v;
+    if (typeof db.config.preco === "number" && db.config.preco > 0) return db.config.preco;
+
+    /* Produtor sem preço próprio: vale o preço padrão de quem está olhando.
+       O leite é o mesmo e o preço é da fazenda, não de cada produtor — sem
+       isto, o painel do administrador mostrava sobra zerada para todo mundo
+       que nunca abriu os Ajustes para digitar o próprio preço.            */
+    if (leitura) {
+      var meu = precoPadraoDaConta();
+      if (typeof meu === "number" && meu > 0) return meu;
+    }
+    return db.config.preco;
+  }
+
+  // o preço padrão de quem está logado, mesmo com os dados de um produtor à frente
+  function precoPadraoDaConta() {
+    if (!conta) return null;
+    try {
+      var d = JSON.parse(localStorage.getItem(chaveDados(conta.id)) || "null");
+      return (d && d.config && typeof d.config.preco === "number") ? d.config.preco : null;
+    } catch (e) { return null; }
   }
   function definirPreco(p, valor) {
     var k = periodKey(p);
@@ -3211,7 +3231,9 @@
       gastoKg: gastoKg,
       custoPorLitro: (gastoTotal && total) ? gastoTotal / total : null,
       custoPorKg: (gastoTotal && gastoKg) ? gastoTotal / gastoKg : null,
-      sobra: (receita !== null && gastoTotal) ? receita - gastoTotal : null
+      /* A sobra depende do preço do litro, não da ração: quem ainda não
+         lançou ração tem sobra igual à receita inteira, e não "sem preço". */
+      sobra: receita !== null ? receita - gastoTotal : null
     };
   }
 
